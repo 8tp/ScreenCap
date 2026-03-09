@@ -18,17 +18,20 @@ class OnboardingWindowController {
             self.window = nil
         }
         let hostingView = NSHostingView(rootView: view)
-        hostingView.frame = NSRect(x: 0, y: 0, width: 420, height: 320)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 500, height: 520)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 320),
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 520),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
-        window.title = "Welcome to ScreenCap"
+        window.title = ""
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
         window.contentView = hostingView
         window.center()
+        window.isMovableByWindowBackground = true
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
@@ -39,72 +42,154 @@ class OnboardingWindowController {
 struct OnboardingView: View {
     let onDismiss: () -> Void
 
+    @State private var screenRecordingGranted = AppPermissions.hasScreenRecordingPermission()
+    @State private var accessibilityGranted = AppPermissions.hasAccessibilityPermission()
+
+    var allGranted: Bool {
+        screenRecordingGranted && accessibilityGranted
+    }
+
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Welcome to ScreenCap!")
-                .font(.title)
-                .fontWeight(.bold)
+        VStack(spacing: 0) {
+            // Header
+            VStack(spacing: 14) {
+                Image(systemName: "camera.viewfinder")
+                    .font(.system(size: 52, weight: .ultraLight))
+                    .foregroundStyle(.primary)
+                    .padding(.top, 28)
 
-            Text("To work properly, we need a few permissions:")
-                .foregroundStyle(.secondary)
+                Text("Welcome to ScreenCap")
+                    .font(.system(size: 24, weight: .bold))
 
-            VStack(alignment: .leading, spacing: 12) {
+                Text("The free, open-source screenshot tool for macOS.\nGrant permissions below to get started.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+            }
+            .padding(.bottom, 28)
+
+            // Permissions
+            VStack(spacing: 0) {
                 PermissionRow(
                     icon: "rectangle.dashed.badge.record",
+                    iconColor: .red,
                     title: "Screen Recording",
-                    description: "Required for capturing screenshots",
-                    isGranted: AppPermissions.hasScreenRecordingPermission()
+                    description: "Required for capturing screenshots and recordings",
+                    isGranted: screenRecordingGranted,
+                    action: {
+                        AppPermissions.requestScreenRecordingPermission()
+                        if !AppPermissions.hasScreenRecordingPermission() {
+                            AppPermissions.openScreenRecordingSettings()
+                        }
+                        refreshStatus()
+                    }
                 )
+
+                Divider().padding(.horizontal, 20)
 
                 PermissionRow(
                     icon: "keyboard",
+                    iconColor: .blue,
                     title: "Accessibility",
                     description: "Required for global keyboard shortcuts",
-                    isGranted: false
-                )
-
-                PermissionRow(
-                    icon: "mic",
-                    title: "Microphone",
-                    description: "Optional - for recording with audio",
-                    isGranted: false
+                    isGranted: accessibilityGranted,
+                    action: {
+                        AppPermissions.requestAccessibilityPermission()
+                        refreshStatus()
+                    }
                 )
             }
-            .padding()
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal, 28)
 
+            Spacer()
+
+            // Shortcut hint
+            if allGranted {
+                HStack(spacing: 6) {
+                    Image(systemName: "keyboard")
+                        .foregroundStyle(.tertiary)
+                        .font(.system(size: 11))
+                    Text("Press ⌘⇧1 to open the capture toolbar")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.bottom, 8)
+            }
+
+            // Bottom buttons
             HStack(spacing: 16) {
-                Button("Open System Settings") {
-                    AppPermissions.openSystemSettings()
+                Button(action: { refreshStatus() }) {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .controlSize(.regular)
+
+                Spacer()
+
+                Button(action: { onDismiss() }) {
+                    Text(allGranted ? "Get Started" : "Continue Anyway")
+                        .frame(minWidth: 100)
                 }
                 .buttonStyle(.borderedProminent)
-
-                Button("Skip") {
-                    onDismiss()
-                }
+                .controlSize(.large)
             }
+            .padding(.horizontal, 28)
+            .padding(.bottom, 28)
         }
-        .padding(30)
+        .frame(width: 500, height: 520)
+    }
+
+    private func refreshStatus() {
+        screenRecordingGranted = AppPermissions.hasScreenRecordingPermission()
+        accessibilityGranted = AppPermissions.hasAccessibilityPermission()
     }
 }
 
 struct PermissionRow: View {
     let icon: String
+    var iconColor: Color = .primary
     let title: String
     let description: String
     let isGranted: Bool
+    var action: (() -> Void)? = nil
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: isGranted ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(isGranted ? .green : .secondary)
-                .font(.title3)
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(iconColor.opacity(0.12))
+                    .frame(width: 36, height: 36)
+                Image(systemName: icon)
+                    .foregroundStyle(iconColor)
+                    .font(.system(size: 16))
+            }
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).fontWeight(.medium)
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
                 Text(description)
-                    .font(.caption)
+                    .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            if isGranted {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.system(size: 20))
+            } else if let action = action {
+                Button("Grant") {
+                    action()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
     }
 }
