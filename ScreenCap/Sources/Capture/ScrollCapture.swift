@@ -6,12 +6,14 @@ class ScrollCapture {
     private var isCapturing = false
     private let scrollIncrement: CGFloat = 200
     private let maxFrames = 50
+    private var activeAreaSelector: AreaSelector?
     var completion: ((Result<URL, Error>) -> Void)?
 
     func start(completion: @escaping (Result<URL, Error>) -> Void) {
         self.completion = completion
 
         let selector = AreaSelector { [weak self] result in
+            self?.activeAreaSelector = nil  // Release after completion
             switch result {
             case .success(let rect):
                 self?.captureRect = rect
@@ -20,6 +22,7 @@ class ScrollCapture {
                 completion(.failure(error))
             }
         }
+        activeAreaSelector = selector  // Retain until completion fires
         selector.show()
     }
 
@@ -39,7 +42,7 @@ class ScrollCapture {
             captureRect,
             .optionOnScreenOnly,
             kCGNullWindowID,
-            [.nominalResolution]
+            [.bestResolution]
         ) else {
             finishCapture()
             return
