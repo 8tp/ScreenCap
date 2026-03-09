@@ -13,10 +13,12 @@ class HotkeyManager {
     var onRecordArea: (() -> Void)?
     var onOCR: (() -> Void)?
     var onColorPicker: (() -> Void)?
+    var onAllInOne: (() -> Void)?
 
     func registerAll() {
         unregisterAll()
 
+        // Primary: Cmd+Shift (matches macOS convention)
         register(key: .three, modifiers: [.command, .shift]) { [weak self] in
             self?.onCaptureFullscreen?()
         }
@@ -39,6 +41,40 @@ class HotkeyManager {
             self?.onOCR?()
         }
         register(key: .zero, modifiers: [.command, .shift]) { [weak self] in
+            self?.onColorPicker?()
+        }
+
+        // All-in-One toolbar: Cmd+Shift+1
+        register(key: .one, modifiers: [.command, .shift]) { [weak self] in
+            self?.onAllInOne?()
+        }
+        register(key: .one, modifiers: [.control, .shift]) { [weak self] in
+            self?.onAllInOne?()
+        }
+
+        // Secondary: Ctrl+Shift (alternative to avoid conflicts with macOS built-in)
+        register(key: .three, modifiers: [.control, .shift]) { [weak self] in
+            self?.onCaptureFullscreen?()
+        }
+        register(key: .four, modifiers: [.control, .shift]) { [weak self] in
+            self?.onCaptureArea?()
+        }
+        register(key: .five, modifiers: [.control, .shift]) { [weak self] in
+            self?.onCaptureWindow?()
+        }
+        register(key: .six, modifiers: [.control, .shift]) { [weak self] in
+            self?.onCaptureScrolling?()
+        }
+        register(key: .seven, modifiers: [.control, .shift]) { [weak self] in
+            self?.onRecordScreen?()
+        }
+        register(key: .eight, modifiers: [.control, .shift]) { [weak self] in
+            self?.onRecordArea?()
+        }
+        register(key: .nine, modifiers: [.control, .shift]) { [weak self] in
+            self?.onOCR?()
+        }
+        register(key: .zero, modifiers: [.control, .shift]) { [weak self] in
             self?.onColorPicker?()
         }
     }

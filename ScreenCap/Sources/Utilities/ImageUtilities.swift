@@ -34,7 +34,7 @@ enum ImageUtilities {
 
     private static func generateFilename() -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss"
+        formatter.dateFormat = "yyyy-MM-dd 'at' HH.mm.ss.SSS"
         return "Screenshot \(formatter.string(from: Date()))"
     }
 
