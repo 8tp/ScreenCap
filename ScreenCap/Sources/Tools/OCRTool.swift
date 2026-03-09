@@ -2,25 +2,29 @@ import Cocoa
 import Vision
 
 class OCRTool {
+    private var activeAreaSelector: AreaSelector?
+
     func captureAndRecognize(completion: @escaping (Result<String, Error>) -> Void) {
-        let selector = AreaSelector { result in
+        let selector = AreaSelector { [weak self] result in
+            self?.activeAreaSelector = nil  // Release after completion
             switch result {
             case .success(let rect):
                 guard let image = CGWindowListCreateImage(
                     rect,
                     .optionOnScreenOnly,
                     kCGNullWindowID,
-                    [.nominalResolution]
+                    [.bestResolution]
                 ) else {
                     completion(.failure(CaptureError.captureFailed))
                     return
                 }
-                self.recognizeText(in: image, completion: completion)
+                self?.recognizeText(in: image, completion: completion)
 
             case .failure(let error):
                 completion(.failure(error))
             }
         }
+        activeAreaSelector = selector  // Retain until completion fires
         selector.show()
     }
 
