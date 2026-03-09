@@ -41,6 +41,10 @@ class Annotation {
     var isFilled: Bool = false
     var isSelected: Bool = false
 
+    // Blur cache — avoids recomputing CIFilter pipeline every frame
+    var cachedBlurImage: CGImage?
+    var cachedBlurRect: NSRect = .zero
+
     init(toolType: AnnotationToolType, color: NSColor = .systemRed, lineWidth: CGFloat = 3) {
         self.toolType = toolType
         self.color = color
@@ -74,7 +78,7 @@ class Annotation {
         case .numberedStep:
             drawNumberedStep(in: context)
         case .crop:
-            break
+            drawCropOverlay(in: context, viewBounds: viewBounds)
         }
 
         if isSelected {
@@ -92,14 +96,9 @@ class Annotation {
         let start = points[0]
         let end = points[1]
 
-        // Shaft
-        context.move(to: start)
-        context.addLine(to: end)
-        context.strokePath()
-
-        // Arrowhead
+        // Arrowhead geometry
         let angle = atan2(end.y - start.y, end.x - start.x)
-        let headLength: CGFloat = 15
+        let headLength: CGFloat = max(12, lineWidth * 4)
         let headAngle: CGFloat = .pi / 6
 
         let p1 = NSPoint(
@@ -111,11 +110,22 @@ class Annotation {
             y: end.y - headLength * sin(angle + headAngle)
         )
 
-        context.setFillColor(color.cgColor)
+        // Shaft — end at base of arrowhead to avoid overlap dot
+        let basePoint = NSPoint(
+            x: (p1.x + p2.x) / 2,
+            y: (p1.y + p2.y) / 2
+        )
+        context.move(to: start)
+        context.addLine(to: basePoint)
+        context.strokePath()
+
+        // Arrowhead — filled triangle
+        context.beginPath()
         context.move(to: end)
         context.addLine(to: p1)
         context.addLine(to: p2)
         context.closePath()
+        context.setFillColor(color.cgColor)
         context.fillPath()
     }
 
@@ -152,9 +162,33 @@ class Annotation {
 
     private func drawFreehand(in context: CGContext) {
         guard points.count >= 2 else { return }
+
+        if points.count <= 3 {
+            context.move(to: points[0])
+            for i in 1..<points.count {
+                context.addLine(to: points[i])
+            }
+            context.strokePath()
+            return
+        }
+
+        // Smooth Catmull-Rom spline for natural pencil feel
         context.move(to: points[0])
-        for i in 1..<points.count {
-            context.addLine(to: points[i])
+        for i in 0..<points.count - 1 {
+            let p0 = points[max(0, i - 1)]
+            let p1 = points[i]
+            let p2 = points[min(points.count - 1, i + 1)]
+            let p3 = points[min(points.count - 1, i + 2)]
+
+            let cp1 = NSPoint(
+                x: p1.x + (p2.x - p0.x) / 6,
+                y: p1.y + (p2.y - p0.y) / 6
+            )
+            let cp2 = NSPoint(
+                x: p2.x - (p3.x - p1.x) / 6,
+                y: p2.y - (p3.y - p1.y) / 6
+            )
+            context.addCurve(to: p2, control1: cp1, control2: cp2)
         }
         context.strokePath()
     }
@@ -182,6 +216,59 @@ class Annotation {
             y: circleRect.midY - textSize.height / 2
         )
         (text as NSString).draw(at: textPoint, withAttributes: attrs)
+    }
+
+    private func drawCropOverlay(in context: CGContext, viewBounds: NSRect) {
+        guard rect.width > 0, rect.height > 0 else { return }
+
+        // Dim area outside crop region
+        context.saveGState()
+        context.setFillColor(NSColor.black.withAlphaComponent(0.5).cgColor)
+
+        // Top
+        context.fill(NSRect(x: 0, y: rect.maxY, width: viewBounds.width, height: viewBounds.height - rect.maxY))
+        // Bottom
+        context.fill(NSRect(x: 0, y: 0, width: viewBounds.width, height: rect.origin.y))
+        // Left
+        context.fill(NSRect(x: 0, y: rect.origin.y, width: rect.origin.x, height: rect.height))
+        // Right
+        context.fill(NSRect(x: rect.maxX, y: rect.origin.y, width: viewBounds.width - rect.maxX, height: rect.height))
+
+        context.restoreGState()
+
+        // Draw crop border
+        context.setStrokeColor(NSColor.white.cgColor)
+        context.setLineWidth(1.5)
+        context.stroke(rect)
+
+        // Draw thirds grid
+        context.setStrokeColor(NSColor.white.withAlphaComponent(0.4).cgColor)
+        context.setLineWidth(0.5)
+        let thirdW = rect.width / 3
+        let thirdH = rect.height / 3
+        for i in 1...2 {
+            let x = rect.origin.x + thirdW * CGFloat(i)
+            context.move(to: CGPoint(x: x, y: rect.origin.y))
+            context.addLine(to: CGPoint(x: x, y: rect.maxY))
+            context.strokePath()
+
+            let y = rect.origin.y + thirdH * CGFloat(i)
+            context.move(to: CGPoint(x: rect.origin.x, y: y))
+            context.addLine(to: CGPoint(x: rect.maxX, y: y))
+            context.strokePath()
+        }
+
+        // Corner handles
+        let handleSize: CGFloat = 8
+        context.setFillColor(NSColor.white.cgColor)
+        for corner in [
+            NSPoint(x: rect.minX, y: rect.minY),
+            NSPoint(x: rect.maxX, y: rect.minY),
+            NSPoint(x: rect.minX, y: rect.maxY),
+            NSPoint(x: rect.maxX, y: rect.maxY),
+        ] {
+            context.fill(NSRect(x: corner.x - handleSize/2, y: corner.y - handleSize/2, width: handleSize, height: handleSize))
+        }
     }
 
     func hitTest(point: NSPoint) -> Bool {
