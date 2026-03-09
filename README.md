@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>A free, native macOS screenshot & annotation app.</strong><br>
-  The open-source alternative to CleanShot X.
+  The free, open-source alternative to paid screenshot tools.
 </p>
 
 <p align="center">
@@ -26,9 +26,9 @@
 
 ## Why ScreenCap?
 
-|  | CleanShot X | macOS Built-in | **ScreenCap** |
+|  | Paid Alternatives | macOS Built-in | **ScreenCap** |
 |:--|:--:|:--:|:--:|
-| Price | $29/yr | Free | **Free** |
+| Price | $29+/yr | Free | **Free** |
 | Area capture with dimensions | Yes | No | **Yes** |
 | Annotation editor | Yes | Markup only | **Yes** |
 | Scrolling capture | Yes | No | **Yes** |
@@ -38,7 +38,7 @@
 | Pin to desktop | Yes | No | **Yes** |
 | GIF export | Yes | No | **Yes** |
 | Open source | No | No | **Yes** |
-| Privacy (no network) | No | Yes | **Yes** |
+| Privacy (no network) | Varies | Yes | **Yes** |
 
 ---
 

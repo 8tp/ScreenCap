@@ -2,7 +2,7 @@
 
 ## Prompt for Claude Code
 
-You are building **ScreenCap**, a native macOS application in **Swift/SwiftUI** that serves as a free, open-source alternative to CleanShot X. It should be a single-binary menubar app with no account, no subscription, and no server dependency. Everything runs locally.
+You are building **ScreenCap**, a native macOS application in **Swift/SwiftUI** that serves as a free, open-source alternative to paid screenshot tools. It should be a single-binary menubar app with no account, no subscription, and no server dependency. Everything runs locally.
 
 ---
 
