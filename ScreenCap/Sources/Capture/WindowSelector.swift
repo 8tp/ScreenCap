@@ -9,7 +9,8 @@ class WindowSelector {
     }
 
     func show() {
-        guard let screen = NSScreen.main else {
+        let mouse = NSEvent.mouseLocation
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) ?? NSScreen.main else {
             completion(.failure(CaptureError.noDisplay))
             return
         }
@@ -81,9 +82,12 @@ class WindowSelectorView: NSView {
 
     override func mouseMoved(with event: NSEvent) {
         let mouseLocation = NSEvent.mouseLocation
-        // Convert to CG coordinates (flipped Y)
-        guard let screen = NSScreen.main else { return }
-        let cgMouseY = screen.frame.height - mouseLocation.y
+        // Convert NS global to CG global (origin top-left of primary display)
+        let ph = NSScreen.primaryHeight
+        let cgMouseY = ph - mouseLocation.y
+
+        // The overlay window's screen — needed to convert CG global → view-local
+        guard let screen = self.window?.screen ?? NSScreen.main else { return }
 
         highlightedWindowInfo = nil
         highlightRect = .zero
@@ -98,10 +102,10 @@ class WindowSelectorView: NSView {
             )
             if windowRect.contains(CGPoint(x: mouseLocation.x, y: cgMouseY)) {
                 highlightedWindowInfo = info
-                // Convert CG rect to NSView coordinates
+                // Convert CG global rect → NS global → view-local
                 highlightRect = CGRect(
-                    x: windowRect.origin.x,
-                    y: screen.frame.height - windowRect.origin.y - windowRect.height,
+                    x: windowRect.origin.x - screen.frame.origin.x,
+                    y: ph - windowRect.origin.y - windowRect.height - screen.frame.origin.y,
                     width: windowRect.width,
                     height: windowRect.height
                 )
@@ -121,7 +125,7 @@ class WindowSelectorView: NSView {
         }
 
         let includeShadow = Defaults.shared.includeWindowShadow
-        let imageOption: CGWindowImageOption = includeShadow ? [.boundsIgnoreFraming, .shouldBeOpaque] : [.boundsIgnoreFraming, .nominalResolution]
+        let imageOption: CGWindowImageOption = includeShadow ? [.bestResolution] : [.boundsIgnoreFraming, .bestResolution]
 
         guard let image = CGWindowListCreateImage(.null, .optionIncludingWindow, windowID, imageOption) else {
             completion(.failure(CaptureError.captureFailed))
