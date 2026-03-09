@@ -1,7 +1,7 @@
 import Cocoa
 
 class PinnedImageWindow {
-    private var window: NSWindow?
+    private var window: NSPanel?
     private let image: NSImage
     private let imageURL: URL
 
@@ -15,33 +15,41 @@ class PinnedImageWindow {
         let scale = min(maxSize / image.size.width, maxSize / image.size.height, 1.0)
         let size = NSSize(width: image.size.width * scale, height: image.size.height * scale)
 
-        let window = NSWindow(
+        let panel = NonActivatingPanel(
             contentRect: NSRect(origin: .zero, size: size),
-            styleMask: [.borderless, .resizable],
+            styleMask: [.borderless, .resizable, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
-        window.level = .floating
-        window.backgroundColor = .clear
-        window.isOpaque = false
-        window.hasShadow = true
-        window.isMovableByWindowBackground = true
-        window.center()
+        panel.level = .floating
+        panel.backgroundColor = .clear
+        panel.isOpaque = false
+        panel.hasShadow = true
+        panel.isMovableByWindowBackground = true
+        panel.hidesOnDeactivate = false
+        panel.contentAspectRatio = size
+        panel.center()
 
         let view = PinnedImageView(frame: NSRect(origin: .zero, size: size), image: image, imageURL: imageURL)
         view.onClose = { [weak self] in
             self?.close()
         }
-        window.contentView = view
-        window.makeKeyAndOrderFront(nil)
+        panel.contentView = view
+        panel.orderFront(nil) // orderFront, not makeKeyAndOrderFront
 
-        self.window = window
+        self.window = panel
     }
 
     func close() {
         window?.orderOut(nil)
         window = nil
     }
+}
+
+/// Panel subclass that never becomes key, so it doesn't steal focus from the user's current app.
+private class NonActivatingPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
 }
 
 class PinnedImageView: NSView {
@@ -53,6 +61,7 @@ class PinnedImageView: NSView {
         self.image = image
         self.imageURL = imageURL
         super.init(frame: frame)
+        autoresizingMask = [.width, .height]
     }
 
     required init?(coder: NSCoder) {
@@ -60,7 +69,20 @@ class PinnedImageView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        image.draw(in: bounds)
+        // Draw preserving aspect ratio within current bounds
+        let imageAspect = image.size.width / image.size.height
+        let viewAspect = bounds.width / bounds.height
+        var drawRect = bounds
+        if imageAspect > viewAspect {
+            // Image is wider — fit to width
+            let h = bounds.width / imageAspect
+            drawRect = NSRect(x: 0, y: (bounds.height - h) / 2, width: bounds.width, height: h)
+        } else {
+            // Image is taller — fit to height
+            let w = bounds.height * imageAspect
+            drawRect = NSRect(x: (bounds.width - w) / 2, y: 0, width: w, height: bounds.height)
+        }
+        image.draw(in: drawRect)
     }
 
     override func rightMouseDown(with event: NSEvent) {
