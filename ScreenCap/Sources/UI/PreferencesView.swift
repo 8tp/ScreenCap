@@ -1,7 +1,7 @@
 import SwiftUI
 import Cocoa
 
-class PreferencesWindowController {
+class PreferencesWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
 
     func show() {
@@ -23,6 +23,8 @@ class PreferencesWindowController {
         )
         window.title = "ScreenCap Preferences"
         window.toolbarStyle = .preference
+        window.isReleasedWhenClosed = false
+        window.delegate = self
         window.contentView = hostingView
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -30,9 +32,14 @@ class PreferencesWindowController {
 
         self.window = window
     }
+
+    func windowWillClose(_ notification: Notification) {
+        window = nil
+    }
 }
 
 struct PreferencesView: View {
+    @StateObject private var launchAtLogin = LaunchAtLoginManager()
     @AppStorage("saveLocation") private var saveLocationPath: String = NSHomeDirectory() + "/Desktop"
     @AppStorage("imageFormat") private var imageFormat: String = "png"
     @AppStorage("jpegQuality") private var jpegQuality: Double = 0.85
@@ -72,6 +79,9 @@ struct PreferencesView: View {
         .onChange(of: shortcutProfileRaw) { _, _ in
             postShortcutConfigurationDidChange()
         }
+        .onAppear {
+            launchAtLogin.refresh()
+        }
     }
 
     private var generalTab: some View {
@@ -91,6 +101,35 @@ struct PreferencesView: View {
                 }
             } header: {
                 Text("Save Location")
+            }
+
+            Section {
+                Toggle(
+                    "Launch ScreenCap at login",
+                    isOn: Binding(
+                        get: { launchAtLogin.isEnabled },
+                        set: { launchAtLogin.setEnabled($0) }
+                    )
+                )
+                .disabled(!launchAtLogin.canManage)
+
+                Text(launchAtLogin.statusMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let errorMessage = launchAtLogin.errorMessage {
+                    Text(errorMessage)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+
+                if launchAtLogin.showsApprovalButton {
+                    Button("Open Login Items Settings") {
+                        launchAtLogin.openLoginItemsSettings()
+                    }
+                }
+            } header: {
+                Text("Startup")
             }
 
             Section {

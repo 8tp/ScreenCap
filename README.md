@@ -67,6 +67,7 @@
 ### Extras
 - **Floating Thumbnail** -- Post-capture preview with drag-and-drop to any app
 - **Pin to Desktop** -- Always-on-top pinned screenshots with adjustable opacity
+- **Launch at Login** -- Optional startup toggle from Preferences for installed app bundles
 - **Toast Notifications** -- Non-intrusive confirmation messages
 
 ---
@@ -127,22 +128,13 @@ ScreenCap/Sources/
   Utilities/     Global hotkeys, image I/O, user defaults
 ```
 
-```mermaid
-graph TD
-    A[MenuBar Controller] --> B[Capture Engine]
-    A --> C[Screen Recorder]
-    A --> D[OCR Tool]
-    A --> E[Color Picker]
-    A --> F[Scroll Capture]
-    B --> G[Floating Thumbnail]
-    C --> G
-    G --> H[Annotation Editor]
-    G --> I[Pin to Desktop]
-    H --> J[Annotation Canvas]
-    J --> K[10 Drawing Tools]
-    L[HotKey Manager] --> A
-    M[Preferences] --> L
-```
+### Runtime Flow
+
+1. `MenuBarController` receives menu and hotkey actions.
+2. Capture actions route into `ScreenCaptureEngine`, `ScreenRecorder`, `ScrollCapture`, `OCRTool`, or `ColorPickerTool`.
+3. Captures and recordings feed `FloatingThumbnailController`.
+4. Thumbnails can open `AnnotationEditorController` or pin images to the desktop.
+5. `PreferencesView` updates shared defaults and shortcut configuration.
 
 ### Tech Stack
 
@@ -162,7 +154,7 @@ graph TD
 
 | Tab | Settings |
 |:----|:---------|
-| **General** | Save location, image format (PNG/JPEG/TIFF), JPEG quality, clipboard/thumbnail/sound toggles |
+| **General** | Save location, launch at login, image format (PNG/JPEG/TIFF), JPEG quality, clipboard/thumbnail/sound toggles |
 | **Capture** | Capture delay, hide desktop icons, window shadow |
 | **Shortcuts** | Switch between conflict-free `Ctrl+Shift` and macOS-style `Cmd+Shift` shortcut profiles |
 | **Advanced** | Thumbnail position & duration, reset all |
