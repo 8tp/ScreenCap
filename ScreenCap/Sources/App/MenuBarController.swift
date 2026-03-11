@@ -2,6 +2,7 @@ import Cocoa
 
 class MenuBarController {
     private var statusItem: NSStatusItem!
+    private weak var statusButton: NSStatusBarButton?
     private let captureEngine: ScreenCaptureEngine
     private let thumbnailController: FloatingThumbnailController
     private let screenRecorder: ScreenRecorder
@@ -9,6 +10,8 @@ class MenuBarController {
     private let colorPicker: ColorPickerTool
     private let scrollCapture: ScrollCapture
     private let preferencesController: PreferencesWindowController
+    private var appBeforeMenuInteraction: NSRunningApplication?
+    var prepareForCapture: (_ preferredApp: NSRunningApplication?, _ action: @escaping () -> Void) -> Void = { _, action in action() }
     var onShowAllInOne: (() -> Void)?
 
     init(captureEngine: ScreenCaptureEngine,
@@ -33,13 +36,15 @@ class MenuBarController {
 
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "ScreenCap")
+            button.target = self
+            button.action = #selector(toggleStatusMenu(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            statusButton = button
         }
-
-        statusItem.menu = buildMenu()
     }
 
     func rebuildMenu() {
-        statusItem.menu = buildMenu()
+        // Menu is built on demand when the status item is clicked.
     }
 
     private func buildMenu() -> NSMenu {
@@ -236,6 +241,12 @@ class MenuBarController {
     // MARK: - Actions
 
     @objc private func captureFullscreen() {
+        prepareForCapture(appBeforeMenuInteraction) { [weak self] in
+            self?.runCaptureFullscreen()
+        }
+    }
+
+    private func runCaptureFullscreen() {
         captureEngine.captureFullscreen { [weak self] result in
             if case .success(let url) = result {
                 self?.thumbnailController.show(for: url)
@@ -245,6 +256,12 @@ class MenuBarController {
     }
 
     @objc private func captureArea() {
+        prepareForCapture(appBeforeMenuInteraction) { [weak self] in
+            self?.runCaptureArea()
+        }
+    }
+
+    private func runCaptureArea() {
         captureEngine.captureArea { [weak self] result in
             if case .success(let url) = result {
                 self?.thumbnailController.show(for: url)
@@ -254,6 +271,12 @@ class MenuBarController {
     }
 
     @objc private func captureWindow() {
+        prepareForCapture(appBeforeMenuInteraction) { [weak self] in
+            self?.runCaptureWindow()
+        }
+    }
+
+    private func runCaptureWindow() {
         captureEngine.captureWindow { [weak self] result in
             if case .success(let url) = result {
                 self?.thumbnailController.show(for: url)
@@ -263,6 +286,12 @@ class MenuBarController {
     }
 
     @objc private func captureScrolling() {
+        prepareForCapture(appBeforeMenuInteraction) { [weak self] in
+            self?.runCaptureScrolling()
+        }
+    }
+
+    private func runCaptureScrolling() {
         scrollCapture.start { [weak self] result in
             if case .success(let url) = result {
                 Defaults.shared.addRecentCapture(url)
@@ -273,14 +302,24 @@ class MenuBarController {
     }
 
     @objc private func recordScreen() {
-        screenRecorder.startFullscreen()
+        prepareForCapture(appBeforeMenuInteraction) { [weak self] in
+            self?.screenRecorder.startFullscreen()
+        }
     }
 
     @objc private func recordArea() {
-        screenRecorder.startArea()
+        prepareForCapture(appBeforeMenuInteraction) { [weak self] in
+            self?.screenRecorder.startArea()
+        }
     }
 
     @objc private func ocrRegion() {
+        prepareForCapture(appBeforeMenuInteraction) { [weak self] in
+            self?.runOCRRegion()
+        }
+    }
+
+    private func runOCRRegion() {
         ocrTool.captureAndRecognize { result in
             switch result {
             case .success(let text):
@@ -292,9 +331,24 @@ class MenuBarController {
     }
 
     @objc private func pickColor() {
-        colorPicker.show { color in
-            // Color is already copied to clipboard by ColorPickerTool
+        prepareForCapture(appBeforeMenuInteraction) { [weak self] in
+            self?.colorPicker.show { _ in
+                // Color is already copied to clipboard by ColorPickerTool
+            }
         }
+    }
+
+    @objc private func toggleStatusMenu(_ sender: Any?) {
+        captureMenuContext()
+        statusItem.popUpMenu(buildMenu())
+    }
+
+    private func captureMenuContext() {
+        guard let frontmost = NSWorkspace.shared.frontmostApplication,
+              frontmost.bundleIdentifier != Bundle.main.bundleIdentifier else {
+            return
+        }
+        appBeforeMenuInteraction = frontmost
     }
 
     @objc private func pinLastCapture() {

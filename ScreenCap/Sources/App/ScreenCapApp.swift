@@ -27,6 +27,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var captureToolbar: CaptureToolbarController!
     private var pinnedWindows: [PinnedImageWindow] = []
     private var shortcutSettingsObserver: NSObjectProtocol?
+    private var workspaceActivationObserver: NSObjectProtocol?
+    private var lastActiveExternalApp: NSRunningApplication?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         captureEngine = ScreenCaptureEngine()
@@ -63,10 +65,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             scrollCapture: scrollCapture,
             preferencesController: preferencesController
         )
+        menuBarController.prepareForCapture = { [weak self] preferredApp, action in
+            self?.prepareForCapture(preferredApp: preferredApp, action: action) ?? action()
+        }
 
         setupCaptureToolbar()
         setupHotkeys()
         observeShortcutSettings()
+        observeWorkspaceActivation()
 
         menuBarController.onShowAllInOne = { [weak self] in
             self?.captureToolbar.toggle()
@@ -145,6 +151,41 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func observeWorkspaceActivation() {
+        updateLastActiveExternalApp(NSWorkspace.shared.frontmostApplication)
+
+        workspaceActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            self?.updateLastActiveExternalApp(app)
+        }
+    }
+
+    private func updateLastActiveExternalApp(_ app: NSRunningApplication?) {
+        guard let app else { return }
+        guard app.bundleIdentifier != Bundle.main.bundleIdentifier else { return }
+        lastActiveExternalApp = app
+    }
+
+    private func prepareForCapture(preferredApp: NSRunningApplication?, action: @escaping () -> Void) {
+        let app = preferredApp?.isTerminated == false ? preferredApp : lastActiveExternalApp
+
+        guard let app, !app.isTerminated else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: action)
+            return
+        }
+
+        if #available(macOS 14.0, *) {
+            app.activate()
+        } else {
+            app.activate(options: [.activateIgnoringOtherApps])
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: action)
+    }
+
     private func pinImage(url: URL) {
         guard let image = NSImage(contentsOf: url) else { return }
         let pinned = PinnedImageWindow(image: image, imageURL: url)
@@ -155,6 +196,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         if let shortcutSettingsObserver {
             NotificationCenter.default.removeObserver(shortcutSettingsObserver)
+        }
+        if let workspaceActivationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(workspaceActivationObserver)
         }
     }
 }
