@@ -17,7 +17,6 @@ DerivedData/
 # Swift Package Manager
 .build/
 .swiftpm/
-Package.resolved
 Packages/
 
 # macOS
@@ -31,3 +30,6 @@ Packages/
 # Build artifacts
 build/
 *.app
+
+# Claude Code
+.claude/

@@ -75,16 +75,17 @@
 
 | Shortcut | Action |
 |:---------|:-------|
-| `Cmd+Shift+3` | Capture Fullscreen |
-| `Cmd+Shift+4` | Capture Area |
-| `Cmd+Shift+5` | Capture Window |
-| `Cmd+Shift+6` | Capture Scrolling |
-| `Cmd+Shift+7` | Record Screen |
-| `Cmd+Shift+8` | Record Area |
-| `Cmd+Shift+9` | OCR Screen Region |
-| `Cmd+Shift+0` | Color Picker |
+| `Ctrl+Shift+1` | Open the all-in-one capture toolbar |
+| `Ctrl+Shift+3` | Capture Fullscreen |
+| `Ctrl+Shift+4` | Capture Area |
+| `Ctrl+Shift+5` | Capture Window |
+| `Ctrl+Shift+6` | Capture Scrolling |
+| `Ctrl+Shift+7` | Record Screen |
+| `Ctrl+Shift+8` | Record Area |
+| `Ctrl+Shift+9` | OCR Screen Region |
+| `Ctrl+Shift+0` | Color Picker |
 
-All shortcuts are configurable in Preferences.
+ScreenCap now defaults to a conflict-free shortcut profile on first launch so it does not fire alongside Apple's built-in screenshot shortcuts. You can switch to a `Cmd+Shift` compatibility profile in Preferences, but macOS screenshot shortcuts should be disabled first if you do.
 
 ---
 
@@ -93,7 +94,7 @@ All shortcuts are configurable in Preferences.
 ### Build from Source
 
 ```bash
-git clone https://github.com/huntermeherin/screencap.git
+git clone https://github.com/8tp/ScreenCap.git
 cd screencap/ScreenCap
 swift build -c release
 ```
@@ -120,10 +121,10 @@ open Package.swift
 ScreenCap/Sources/
   App/           App lifecycle, menubar, permissions
   Capture/       Screenshot engine, area/window/scroll capture, recording, GIF
-  Editor/        Annotation editor, canvas, 10 drawing tools
+  Editor/        Annotation editor, canvas, 10 drawing tools, background presets
   Tools/         OCR (Vision), color picker, magnifier
   UI/            Floating thumbnail, pin window, preferences, onboarding, toasts
-  Utilities/     Global hotkeys, image I/O, user defaults, file naming
+  Utilities/     Global hotkeys, image I/O, user defaults
 ```
 
 ```mermaid
@@ -162,8 +163,9 @@ graph TD
 | Tab | Settings |
 |:----|:---------|
 | **General** | Save location, image format (PNG/JPEG/TIFF), JPEG quality, clipboard/thumbnail/sound toggles |
-| **Shortcuts** | Rebind all keyboard shortcuts |
-| **Advanced** | Window shadow toggle, thumbnail position & duration, reset all |
+| **Capture** | Capture delay, hide desktop icons, window shadow |
+| **Shortcuts** | Switch between conflict-free `Ctrl+Shift` and macOS-style `Cmd+Shift` shortcut profiles |
+| **Advanced** | Thumbnail position & duration, reset all |
 
 ---
 

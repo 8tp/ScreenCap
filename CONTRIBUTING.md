@@ -15,6 +15,7 @@ Thanks for your interest in contributing! ScreenCap is a community-driven projec
 - **macOS 14 (Sonoma)** minimum deployment target
 - Set signing to "Sign to Run Locally" in Xcode
 - Grant Screen Recording permission when prompted
+- ScreenCap defaults to `Ctrl+Shift` shortcuts to avoid colliding with Apple's screenshot shortcuts
 
 ## Project Structure
 
@@ -25,7 +26,7 @@ ScreenCap/Sources/
   Editor/      - Annotation editor, canvas, tools
   Tools/       - OCR, color picker, magnifier
   UI/          - Floating thumbnail, preferences, onboarding, toasts
-  Utilities/   - Hotkeys, image utilities, defaults, file naming
+  Utilities/   - Hotkeys, image utilities, defaults
 ```
 
 ## Guidelines
@@ -41,6 +42,7 @@ ScreenCap/Sources/
 - Include a clear description of what changed and why.
 - Test on macOS 14+ before submitting.
 - Ensure `swift build` passes without errors.
+- If you touch shortcuts, verify both onboarding and Preferences still show the active shortcut profile correctly.
 
 ### Commit Messages
 - Use present tense: "Add feature" not "Added feature"

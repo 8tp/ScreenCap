@@ -28,16 +28,16 @@ You are building **ScreenCap**, a native macOS application in **Swift/SwiftUI** 
 ### 2.2 Menubar Dropdown Items
 ```
 ┌─────────────────────────────┐
-│  ⌘⇧3  Capture Fullscreen   │
-│  ⌘⇧4  Capture Area         │
-│  ⌘⇧5  Capture Window       │
-│  ⌘⇧6  Capture Scrolling    │
+│  ⌃⇧3  Capture Fullscreen   │
+│  ⌃⇧4  Capture Area         │
+│  ⌃⇧5  Capture Window       │
+│  ⌃⇧6  Capture Scrolling    │
 │  ─────────────────────────  │
-│  ⌘⇧7  Record Screen        │
-│  ⌘⇧8  Record Area          │
+│  ⌃⇧7  Record Screen        │
+│  ⌃⇧8  Record Area          │
 │  ─────────────────────────  │
-│  ⌘⇧9  OCR Screen Region    │
-│  ⌘⇧0  Color Picker         │
+│  ⌃⇧9  OCR Screen Region    │
+│  ⌃⇧0  Color Picker         │
 │  ─────────────────────────  │
 │  📌 Pin Last Capture        │
 │  🕑 Recent Captures ▸       │
@@ -49,8 +49,10 @@ You are building **ScreenCap**, a native macOS application in **Swift/SwiftUI** 
 
 ### 2.3 Global Keyboard Shortcuts
 - Register global hotkeys using `CGEvent` tap or `MASShortcut`-style approach.
-- All shortcuts must be user-configurable in Preferences.
-- Defaults shown above (⌘⇧3 through ⌘⇧0).
+- First iteration uses a profile-based shortcut system in Preferences.
+- Default profile: `Ctrl+Shift` for all capture actions so ScreenCap does not collide with Apple's screenshot shortcuts.
+- Optional compatibility profile: `Cmd+Shift` for users who prefer the macOS convention and have disabled the built-in screenshot shortcuts.
+- Per-action rebinding is still a planned follow-up after the first public GitHub release.
 
 ---
 
@@ -217,8 +219,8 @@ Build a SwiftUI-based Preferences window with these tabs:
 
 ### 7.2 Shortcuts
 - A list of all actions with their current keybindings.
-- Click a shortcut field → press new key combo → saves.
-- "Restore Defaults" button.
+- A profile picker toggles between conflict-free `Ctrl+Shift` defaults and macOS-style `Cmd+Shift`.
+- "Restore Defaults" resets the shortcut profile back to `Ctrl+Shift`.
 
 ### 7.3 Recording
 - **Output format:** MP4 / GIF.
@@ -240,7 +242,7 @@ Build a SwiftUI-based Preferences window with these tabs:
 
 ## 8. Quick Access Overlay (Optional Enhancement)
 
-When the user presses a single configurable hotkey (e.g., `⌘⇧X`), show a radial or grid overlay in the center of the screen with all capture modes as icons. User clicks one to activate. Dismiss with `Escape` or clicking outside.
+When the user presses a single configurable hotkey (e.g., `Ctrl+Shift+1` in the first iteration), show a radial or grid overlay in the center of the screen with all capture modes as icons. User clicks one to activate. Dismiss with `Escape` or clicking outside.
 
 This is a "nice to have" — implement only after all core features work.
 
@@ -257,6 +259,10 @@ On first launch, show a friendly onboarding window:
 ```
 ┌─────────────────────────────────────┐
 │  Welcome to ScreenCap!              │
+│                                     │
+│  Shortcut Profile                   │
+│  ◉ Ctrl+Shift (recommended)         │
+│  ○ Cmd+Shift (disable macOS first)  │
 │                                     │
 │  To work properly, we need a few    │
 │  permissions:                       │
@@ -324,20 +330,12 @@ ScreenCap/
 │   ├── Editor/
 │   │   ├── AnnotationEditor.swift       // Main editor window
 │   │   ├── AnnotationCanvas.swift       // Canvas view with annotation rendering
-│   │   ├── AnnotationTool.swift         // Protocol + tool implementations
-│   │   ├── Tools/
-│   │   │   ├── ArrowTool.swift
-│   │   │   ├── RectangleTool.swift
-│   │   │   ├── EllipseTool.swift
-│   │   │   ├── LineTool.swift
-│   │   │   ├── TextTool.swift
-│   │   │   ├── FreehandTool.swift
-│   │   │   ├── HighlightTool.swift
-│   │   │   ├── BlurTool.swift
-│   │   │   ├── NumberedStepTool.swift
-│   │   │   └── CropTool.swift
-│   │   └── UndoManager.swift
+│   │   ├── AnnotationTool.swift         // Tool types + annotation model
+│   │   ├── BackgroundTool.swift         // Background gradient presets
+│   │   └── Tools/                       // (reserved for future tool separation)
 │   ├── UI/
+│   │   ├── AboutWindow.swift            // About dialog
+│   │   ├── CaptureToolbar.swift         // Capture mode floating toolbar
 │   │   ├── FloatingThumbnail.swift      // Post-capture preview
 │   │   ├── PinnedImageWindow.swift      // Pinned screenshot window
 │   │   ├── PreferencesView.swift        // Settings window
@@ -346,7 +344,6 @@ ScreenCap/
 │   └── Utilities/
 │       ├── HotkeyManager.swift          // Global shortcut registration
 │       ├── ImageUtilities.swift         // Saving, format conversion
-│       ├── FileNaming.swift             // Filename pattern generation
 │       └── Defaults.swift               // UserDefaults keys/wrappers
 └── Resources/
     ├── Assets.xcassets/                 // App icon, menubar icons
@@ -384,7 +381,7 @@ Build features in this order:
 6. **Annotation editor** — canvas + basic tools (arrow, rectangle, text, blur).
 7. **Remaining annotation tools** — ellipse, line, freehand, highlight, numbered steps, crop.
 8. **Preferences window** — all settings wired up.
-9. **Global hotkeys** — register all shortcuts, make configurable.
+9. **Global hotkeys** — register the shared shortcut profiles, then add per-action rebinding later.
 10. **Pin to desktop** — always-on-top pinned images.
 11. **Screen recording** — video capture + toolbar.
 12. **GIF export** — convert recordings to GIF.
