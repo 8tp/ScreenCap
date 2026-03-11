@@ -2,11 +2,11 @@
   <img src="https://img.icons8.com/sf-regular-filled/96/228BE6/screenshot.png" alt="ScreenCap Logo" width="96" height="96">
 </p>
 
-<h1 align="center">ScreenCap</h1>
+<h1 align="center">ScreenCap — Free macOS Screenshot & Screen Recording App</h1>
 
 <p align="center">
-  <strong>A free, native macOS screenshot & annotation app.</strong><br>
-  The free, open-source alternative to paid screenshot tools.
+  <strong>The open-source CleanShot X alternative for macOS.</strong><br>
+  Screenshots, screen recording, annotation, OCR, scrolling capture, GIF export & color picker — all free, all local.
 </p>
 
 <p align="center">
@@ -24,11 +24,11 @@
 
 ---
 
-## Why ScreenCap?
+## Why ScreenCap over CleanShot X, Snagit, or macOS Screenshots?
 
-|  | Paid Alternatives | macOS Built-in | **ScreenCap** |
+|  | Paid Tools (CleanShot X, Snagit) | macOS Built-in | **ScreenCap** |
 |:--|:--:|:--:|:--:|
-| Price | $29+/yr | Free | **Free** |
+| Price | $29–89/yr | Free | **Free forever** |
 | Area capture with dimensions | Yes | No | **Yes** |
 | Annotation editor | Yes | Markup only | **Yes** |
 | Scrolling capture | Yes | No | **Yes** |
@@ -180,5 +180,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ---
 
 <p align="center">
-  <sub>Built with Swift, SwiftUI, and AppKit. One dependency. No compromises.</sub>
+  <sub>ScreenCap — the free, open-source screenshot tool for macOS. Built with Swift, SwiftUI, and AppKit.</sub>
 </p>
