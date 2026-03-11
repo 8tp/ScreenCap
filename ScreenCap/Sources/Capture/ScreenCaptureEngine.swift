@@ -50,14 +50,14 @@ class ScreenCaptureEngine {
             self?.activeAreaSelector = nil  // Release after completion
             guard let self = self else { return }
             switch result {
-            case .success(let rect):
+            case .success(let (rect, overlayWindowID)):
                 self.performWithDelay {
                     self.hideDesktopIconsIfNeeded()
 
                     guard let image = CGWindowListCreateImage(
                         rect,
-                        .optionOnScreenOnly,
-                        kCGNullWindowID,
+                        .optionOnScreenBelowWindow,
+                        overlayWindowID,
                         [.bestResolution]
                     ) else {
                         self.restoreDesktopIconsIfNeeded()

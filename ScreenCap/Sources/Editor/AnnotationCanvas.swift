@@ -12,10 +12,12 @@ class AnnotationCanvas: NSView {
     var currentFilled: Bool = false
     var onAnnotationsChanged: (() -> Void)?
     var onCropApplied: ((NSRect) -> Void)?
+    var onCanvasSizeChanged: (() -> Void)?
 
     private struct UndoState {
         let image: NSImage?
         let annotations: [Annotation]
+        let canvasSize: NSSize
     }
 
     private static let sharedCIContext = CIContext()
@@ -27,6 +29,10 @@ class AnnotationCanvas: NSView {
     private var redoStack: [UndoState] = []
     private var cropAnnotation: Annotation?
     private var activeTextField: NSTextField?
+
+    // Selection/move state
+    private var movingAnnotation: Annotation?
+    private var moveOffset: NSPoint = .zero
 
     override var acceptsFirstResponder: Bool { true }
 
@@ -40,27 +46,31 @@ class AnnotationCanvas: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
 
-        // Draw base image
         if let image = baseImage {
             image.draw(in: bounds)
         }
 
-        // Apply blur annotations to the image layer
+        // Draw blur annotations
         for annotation in annotations where annotation.toolType == .blur {
             drawBlur(annotation: annotation, in: context)
         }
 
-        // Draw all other annotations (except crop)
+        // Live blur preview while dragging
+        if let active = activeAnnotation, active.toolType == .blur {
+            drawBlur(annotation: active, in: context)
+        }
+
+        // Draw all other annotations (except crop and blur)
         for annotation in annotations where annotation.toolType != .blur && annotation.toolType != .crop {
             annotation.draw(in: context, viewBounds: bounds)
         }
 
-        // Draw active annotation being created
+        // Draw active annotation being created (except blur which is drawn above, and crop)
         if let active = activeAnnotation, active.toolType != .blur, active.toolType != .crop {
             active.draw(in: context, viewBounds: bounds)
         }
 
-        // Draw crop overlay last (on top of everything)
+        // Draw crop overlay last
         if let crop = cropAnnotation {
             crop.draw(in: context, viewBounds: bounds)
         } else if let active = activeAnnotation, active.toolType == .crop {
@@ -71,7 +81,6 @@ class AnnotationCanvas: NSView {
     private func drawBlur(annotation: Annotation, in context: CGContext) {
         guard annotation.rect.width > 0, annotation.rect.height > 0 else { return }
 
-        // Use cached blur if the rect hasn't changed
         if let cached = annotation.cachedBlurImage, annotation.cachedBlurRect == annotation.rect {
             context.draw(cached, in: annotation.rect)
             return
@@ -99,7 +108,6 @@ class AnnotationCanvas: NSView {
 
         guard let cgImage = Self.sharedCIContext.createCGImage(croppedBlur, from: ciRect) else { return }
 
-        // Cache the result
         annotation.cachedBlurImage = cgImage
         annotation.cachedBlurRect = annotation.rect
 
@@ -109,31 +117,21 @@ class AnnotationCanvas: NSView {
     // MARK: - Mouse Events
 
     override func mouseDown(with event: NSEvent) {
-        // Dismiss any active text field first
         commitActiveTextField()
         window?.makeFirstResponder(self)
 
         let point = convert(event.locationInWindow, from: nil)
         dragStart = point
 
-        // Check for click-to-select on existing annotations (reverse order = topmost first)
-        if event.clickCount == 1 {
-            var hitFound = false
-            for annotation in annotations.reversed() {
-                if annotation.hitTest(point: point) {
-                    // Deselect all others
-                    for a in annotations { a.isSelected = false }
-                    annotation.isSelected = true
-                    hitFound = true
-                    needsDisplay = true
-                    break
-                }
-            }
-            if !hitFound {
-                for a in annotations { a.isSelected = false }
-                needsDisplay = true
-            }
+        // Select tool: click to select, then drag to move
+        if currentTool == .select {
+            handleSelectMouseDown(point: point)
+            return
         }
+
+        // For non-select tools, deselect all on click
+        for a in annotations { a.isSelected = false }
+        needsDisplay = true
 
         if currentTool == .text {
             handleInlineText(at: point)
@@ -178,8 +176,19 @@ class AnnotationCanvas: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let annotation = activeAnnotation, let start = dragStart else { return }
         let point = convert(event.locationInWindow, from: nil)
+
+        // Handle move drag for select tool
+        if currentTool == .select, let moving = movingAnnotation {
+            let dx = point.x - moveOffset.x
+            let dy = point.y - moveOffset.y
+            moveOffset = point
+            moveAnnotation(moving, dx: dx, dy: dy)
+            needsDisplay = true
+            return
+        }
+
+        guard let annotation = activeAnnotation, let start = dragStart else { return }
 
         switch annotation.toolType {
         case .arrow, .line:
@@ -192,6 +201,20 @@ class AnnotationCanvas: NSView {
             }
         case .freehand:
             annotation.points.append(point)
+        case .blur:
+            var rect = NSRect(
+                x: min(start.x, point.x),
+                y: min(start.y, point.y),
+                width: abs(point.x - start.x),
+                height: abs(point.y - start.y)
+            )
+            if NSEvent.modifierFlags.contains(.shift) {
+                let side = max(rect.width, rect.height)
+                rect.size = NSSize(width: side, height: side)
+            }
+            annotation.rect = rect
+            // Clear blur cache so it re-renders during drag
+            annotation.cachedBlurImage = nil
         default:
             var rect = NSRect(
                 x: min(start.x, point.x),
@@ -210,6 +233,13 @@ class AnnotationCanvas: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        // Finish move
+        if currentTool == .select, movingAnnotation != nil {
+            movingAnnotation = nil
+            onAnnotationsChanged?()
+            return
+        }
+
         guard let annotation = activeAnnotation else { return }
 
         if annotation.toolType == .crop {
@@ -232,12 +262,58 @@ class AnnotationCanvas: NSView {
         onAnnotationsChanged?()
     }
 
+    // MARK: - Select & Move
+
+    private func handleSelectMouseDown(point: NSPoint) {
+        // Check for hit on existing annotation (reverse order = topmost first)
+        var hitAnnotation: Annotation?
+        for annotation in annotations.reversed() {
+            if annotation.hitTest(point: point) {
+                hitAnnotation = annotation
+                break
+            }
+        }
+
+        if let hit = hitAnnotation {
+            // Select it
+            for a in annotations { a.isSelected = false }
+            hit.isSelected = true
+
+            // Start move
+            pushUndo()
+            movingAnnotation = hit
+            moveOffset = point
+        } else {
+            // Deselect all
+            for a in annotations { a.isSelected = false }
+            movingAnnotation = nil
+        }
+
+        needsDisplay = true
+    }
+
+    private func moveAnnotation(_ annotation: Annotation, dx: CGFloat, dy: CGFloat) {
+        switch annotation.toolType {
+        case .arrow, .line, .freehand:
+            for i in 0..<annotation.points.count {
+                annotation.points[i].x += dx
+                annotation.points[i].y += dy
+            }
+        default:
+            annotation.rect.origin.x += dx
+            annotation.rect.origin.y += dy
+        }
+        // Clear blur cache if moving a blur annotation
+        if annotation.toolType == .blur {
+            annotation.cachedBlurImage = nil
+        }
+    }
+
     // MARK: - Keyboard
 
     override func keyDown(with event: NSEvent) {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
-        // Cmd+Z = undo, Cmd+Shift+Z = redo
         if flags.contains(.command) {
             if event.charactersIgnoringModifiers == "z" {
                 if flags.contains(.shift) {
@@ -259,7 +335,6 @@ class AnnotationCanvas: NSView {
                 needsDisplay = true
                 return
             }
-            // Deselect any selected annotation
             for a in annotations { a.isSelected = false }
             needsDisplay = true
             return
@@ -359,6 +434,7 @@ class AnnotationCanvas: NSView {
 
         let croppedImage = NSImage(cgImage: croppedCG, size: NSSize(width: croppedCG.width, height: croppedCG.height))
 
+        // Save undo state BEFORE changing anything (includes current canvas size)
         pushUndo()
         annotations.removeAll()
         cropAnnotation = nil
@@ -372,6 +448,7 @@ class AnnotationCanvas: NSView {
 
         needsDisplay = true
         onAnnotationsChanged?()
+        onCanvasSizeChanged?()
     }
 
     func cancelCrop() {
@@ -384,24 +461,39 @@ class AnnotationCanvas: NSView {
     // MARK: - Undo/Redo
 
     func pushUndo() {
-        undoStack.append(UndoState(image: baseImage, annotations: annotations.map { copyAnnotation($0) }))
+        undoStack.append(UndoState(image: baseImage, annotations: annotations.map { copyAnnotation($0) }, canvasSize: frame.size))
         redoStack.removeAll()
     }
 
     func performUndo() {
         guard let previous = undoStack.popLast() else { return }
-        redoStack.append(UndoState(image: baseImage, annotations: annotations.map { copyAnnotation($0) }))
+        redoStack.append(UndoState(image: baseImage, annotations: annotations.map { copyAnnotation($0) }, canvasSize: frame.size))
         baseImage = previous.image
         annotations = previous.annotations
+        cropAnnotation = nil
+
+        // Restore canvas size (critical for undoing crop)
+        if previous.canvasSize != frame.size {
+            frame = NSRect(origin: frame.origin, size: previous.canvasSize)
+            onCanvasSizeChanged?()
+        }
+
         needsDisplay = true
         onAnnotationsChanged?()
     }
 
     func performRedo() {
         guard let next = redoStack.popLast() else { return }
-        undoStack.append(UndoState(image: baseImage, annotations: annotations.map { copyAnnotation($0) }))
+        undoStack.append(UndoState(image: baseImage, annotations: annotations.map { copyAnnotation($0) }, canvasSize: frame.size))
         baseImage = next.image
         annotations = next.annotations
+        cropAnnotation = nil
+
+        if next.canvasSize != frame.size {
+            frame = NSRect(origin: frame.origin, size: next.canvasSize)
+            onCanvasSizeChanged?()
+        }
+
         needsDisplay = true
         onAnnotationsChanged?()
     }

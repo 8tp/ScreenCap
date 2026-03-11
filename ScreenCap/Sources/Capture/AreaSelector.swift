@@ -2,9 +2,9 @@ import Cocoa
 
 class AreaSelector {
     private var overlayWindow: NSWindow?
-    private let completion: (Result<CGRect, Error>) -> Void
+    private let completion: (Result<(CGRect, CGWindowID), Error>) -> Void
 
-    init(completion: @escaping (Result<CGRect, Error>) -> Void) {
+    init(completion: @escaping (Result<(CGRect, CGWindowID), Error>) -> Void) {
         self.completion = completion
     }
 
@@ -35,9 +35,17 @@ class AreaSelector {
         window.acceptsMouseMovedEvents = true
 
         let view = AreaSelectorView(frame: screen.frame, frozenImage: frozenImage) { [weak self] result in
-            self?.overlayWindow?.orderOut(nil)
-            self?.overlayWindow = nil
-            self?.completion(result)
+            switch result {
+            case .success(let rect):
+                let windowID = CGWindowID(self?.overlayWindow?.windowNumber ?? 0)
+                self?.overlayWindow?.orderOut(nil)
+                self?.overlayWindow = nil
+                self?.completion(.success((rect, windowID)))
+            case .failure(let error):
+                self?.overlayWindow?.orderOut(nil)
+                self?.overlayWindow = nil
+                self?.completion(.failure(error))
+            }
         }
         window.contentView = view
         window.makeKeyAndOrderFront(nil)

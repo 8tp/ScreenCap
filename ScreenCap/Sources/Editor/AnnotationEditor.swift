@@ -1,7 +1,7 @@
 import Cocoa
 import SwiftUI
 
-class AnnotationEditorController {
+class AnnotationEditorController: NSObject, NSWindowDelegate {
     private var editorWindow: NSWindow?
     private var canvas: AnnotationCanvas?
     private var cropBar: NSView?
@@ -11,6 +11,20 @@ class AnnotationEditorController {
     private var scrollView: NSScrollView?
     private var clipViewObserver: NSObjectProtocol?
     private var relayoutWorkItem: DispatchWorkItem?
+
+    func windowWillClose(_ notification: Notification) {
+        if let obs = clipViewObserver {
+            NotificationCenter.default.removeObserver(obs)
+            clipViewObserver = nil
+        }
+        relayoutWorkItem?.cancel()
+        relayoutWorkItem = nil
+        editorWindow = nil
+        canvas = nil
+        scrollView = nil
+        toolbar = nil
+        cropBar = nil
+    }
 
     func open(imageURL: URL) {
         guard let image = NSImage(contentsOf: imageURL) else { return }
@@ -48,6 +62,8 @@ class AnnotationEditorController {
         window.titlebarAppearsTransparent = false
         window.toolbarStyle = .unified
         window.minSize = NSSize(width: minToolbarWidth, height: 400)
+        window.isReleasedWhenClosed = false
+        window.delegate = self
 
         // Content view
         let contentView = NSView(frame: NSRect(origin: .zero, size: NSSize(width: windowWidth, height: windowHeight)))
@@ -140,6 +156,11 @@ class AnnotationEditorController {
         // Crop callback
         canvasView.onCropApplied = { [weak self] _ in
             self?.showCropBar()
+        }
+
+        // Canvas size changed (after crop undo/redo)
+        canvasView.onCanvasSizeChanged = { [weak self] in
+            self?.relayoutDocumentView()
         }
 
         // Bottom bar
@@ -348,7 +369,7 @@ class EditorToolbar: NSView {
     private var selectedColorIndex: Int = 0
     private var fillButton: NSButton?
 
-    private let tools: [AnnotationToolType] = [.arrow, .rectangle, .ellipse, .line, .text, .freehand, .highlight, .blur, .numberedStep, .crop]
+    private let tools: [AnnotationToolType] = [.select, .arrow, .rectangle, .ellipse, .line, .text, .freehand, .highlight, .blur, .numberedStep, .crop]
     private let colorPalette: [(NSColor, String)] = [
         (.systemRed, "Red"), (.systemOrange, "Orange"), (.systemYellow, "Yellow"),
         (.systemGreen, "Green"), (.systemBlue, "Blue"), (.systemPurple, "Purple"),

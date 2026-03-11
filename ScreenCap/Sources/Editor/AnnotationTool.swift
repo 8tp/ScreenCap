@@ -1,6 +1,7 @@
 import Cocoa
 
 enum AnnotationToolType: String, CaseIterable {
+    case select = "Select"
     case arrow = "Arrow"
     case rectangle = "Rectangle"
     case ellipse = "Ellipse"
@@ -14,6 +15,7 @@ enum AnnotationToolType: String, CaseIterable {
 
     var iconName: String {
         switch self {
+        case .select: return "cursorarrow"
         case .arrow: return "arrow.up.right"
         case .rectangle: return "rectangle"
         case .ellipse: return "oval"
@@ -59,6 +61,8 @@ class Annotation {
         context.setLineJoin(.round)
 
         switch toolType {
+        case .select:
+            break // select tool doesn't draw
         case .arrow:
             drawArrow(in: context)
         case .rectangle:

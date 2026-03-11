@@ -8,11 +8,11 @@ class OCRTool {
         let selector = AreaSelector { [weak self] result in
             self?.activeAreaSelector = nil  // Release after completion
             switch result {
-            case .success(let rect):
+            case .success(let (rect, overlayWindowID)):
                 guard let image = CGWindowListCreateImage(
                     rect,
-                    .optionOnScreenOnly,
-                    kCGNullWindowID,
+                    .optionOnScreenBelowWindow,
+                    overlayWindowID,
                     [.bestResolution]
                 ) else {
                     completion(.failure(CaptureError.captureFailed))

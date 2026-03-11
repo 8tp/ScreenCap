@@ -4,7 +4,7 @@ import ImageIO
 import UniformTypeIdentifiers
 
 class GIFExporter {
-    static func exportToGIF(videoURL: URL, maxWidth: Int = 640, fps: Int = 15, completion: @escaping (Result<URL, Error>) -> Void) {
+    static func exportToGIF(videoURL: URL, maxWidth: Int = 800, fps: Int = 20, completion: @escaping (Result<URL, Error>) -> Void) {
         let asset = AVAsset(url: videoURL)
 
         Task {
@@ -22,11 +22,14 @@ class GIFExporter {
             }
 
             let scale = min(CGFloat(maxWidth) / videoSize.width, 1.0)
-            let outputSize = CGSize(width: videoSize.width * scale, height: videoSize.height * scale)
+            let outputSize = CGSize(width: round(videoSize.width * scale), height: round(videoSize.height * scale))
 
             let generator = AVAssetImageGenerator(asset: asset)
             generator.maximumSize = outputSize
             generator.appliesPreferredTrackTransform = true
+            // Tight timing tolerances for smooth, consistent frame timing
+            generator.requestedTimeToleranceBefore = CMTime(value: 1, timescale: 600)
+            generator.requestedTimeToleranceAfter = CMTime(value: 1, timescale: 600)
 
             let totalSeconds = CMTimeGetSeconds(videoDuration)
             let frameCount = Int(totalSeconds * Double(fps))
@@ -42,6 +45,7 @@ class GIFExporter {
                 return
             }
 
+            // Global GIF properties
             let gifProperties: [String: Any] = [
                 kCGImagePropertyGIFDictionary as String: [
                     kCGImagePropertyGIFLoopCount as String: 0
@@ -52,12 +56,21 @@ class GIFExporter {
             let frameDelay = 1.0 / Double(fps)
             let frameProperties: [String: Any] = [
                 kCGImagePropertyGIFDictionary as String: [
-                    kCGImagePropertyGIFDelayTime as String: frameDelay
+                    kCGImagePropertyGIFUnclampedDelayTime as String: frameDelay,
+                    kCGImagePropertyGIFDelayTime as String: frameDelay,
                 ]
             ]
 
+            // Generate all frame times upfront for batch generation
+            var times: [NSValue] = []
             for i in 0..<frameCount {
-                let time = CMTime(seconds: Double(i) / Double(fps), preferredTimescale: 600)
+                let time = CMTime(seconds: Double(i) * frameDelay, preferredTimescale: 600)
+                times.append(NSValue(time: time))
+            }
+
+            // Extract frames sequentially with exact timing
+            for i in 0..<frameCount {
+                let time = CMTime(seconds: Double(i) * frameDelay, preferredTimescale: 600)
                 do {
                     let (image, _) = try await generator.image(at: time)
                     CGImageDestinationAddImage(destination, image, frameProperties as CFDictionary)

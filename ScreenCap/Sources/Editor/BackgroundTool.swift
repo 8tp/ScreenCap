@@ -206,12 +206,14 @@ class BackgroundPanelController {
     private var config = BackgroundConfig()
     private var previewImageView: NSImageView?
     private var sourceImage: NSImage?
+    private var presetButtons: [PresetButton] = []
 
     func show(for image: NSImage) {
         sourceImage = image
 
         let panelWidth: CGFloat = 340
-        let panelHeight: CGFloat = 520
+        let panelHeight: CGFloat = 580
+        let bottomBarHeight: CGFloat = 56
 
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight),
@@ -223,26 +225,64 @@ class BackgroundPanelController {
         window.titlebarAppearsTransparent = false
         window.isMovableByWindowBackground = true
 
-        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight))
-        contentView.wantsLayer = true
+        // Root view holds scroll view + pinned bottom bar
+        let rootView = NSView(frame: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight))
+        rootView.wantsLayer = true
 
-        var y: CGFloat = panelHeight - 20
+        // --- Bottom bar (pinned) ---
+        let bottomBar = NSView(frame: NSRect(x: 0, y: 0, width: panelWidth, height: bottomBarHeight))
+        bottomBar.wantsLayer = true
+        rootView.addSubview(bottomBar)
+
+        let applyBtn = NSButton(title: "Apply Background", target: self, action: #selector(applyClicked))
+        applyBtn.bezelStyle = .rounded
+        applyBtn.controlSize = .large
+        applyBtn.keyEquivalent = "\r"
+        applyBtn.frame = NSRect(x: panelWidth / 2 - 75, y: 12, width: 150, height: 32)
+        bottomBar.addSubview(applyBtn)
+
+        // --- Scrollable content ---
+        // Build content from top down, then flip y at the end
+        let scrollContentWidth = panelWidth
+        var y: CGFloat = 0  // we'll calculate total height, then position from top
+
+        // Calculate all positions top-down first
+        let previewSize: CGFloat = 160
+        let topPadding: CGFloat = 16
+        let sectionGap: CGFloat = 16
+        let presets = BackgroundPreset.presets
+        let gridCols = 4
+        let cellSize: CGFloat = 60
+        let gridSpacing: CGFloat = 8
+        let gridWidth = CGFloat(gridCols) * cellSize + CGFloat(gridCols - 1) * gridSpacing
+        let gridX = (scrollContentWidth - gridWidth) / 2
+        let rows = (presets.count + gridCols - 1) / gridCols
+        let gridHeight = CGFloat(rows) * (cellSize + gridSpacing) - gridSpacing
+        let sliderRowHeight: CGFloat = 28
+        let bottomPadding: CGFloat = 12
+
+        let totalContentHeight = topPadding + previewSize + sectionGap + 18 + 4 + gridHeight + sectionGap + sliderRowHeight * 3 + bottomPadding
+
+        let documentView = NSView(frame: NSRect(x: 0, y: 0, width: scrollContentWidth, height: totalContentHeight))
+        documentView.wantsLayer = true
+
+        // Position everything top-down (y from top of documentView)
+        y = totalContentHeight - topPadding
 
         // Preview
-        let previewSize: CGFloat = 160
-        let previewX = (panelWidth - previewSize) / 2
         y -= previewSize
+        let previewX = (scrollContentWidth - previewSize) / 2
         let previewView = NSImageView(frame: NSRect(x: previewX, y: y, width: previewSize, height: previewSize))
         previewView.imageScaling = .scaleProportionallyUpOrDown
+        previewView.imageFrameStyle = .none
         previewView.wantsLayer = true
         previewView.layer?.cornerRadius = 8
-        previewView.layer?.borderWidth = 0.5
-        previewView.layer?.borderColor = NSColor.separatorColor.cgColor
-        contentView.addSubview(previewView)
+        previewView.layer?.masksToBounds = true
+        documentView.addSubview(previewView)
         self.previewImageView = previewView
         updatePreview()
 
-        y -= 20
+        y -= sectionGap
 
         // Preset grid header
         y -= 18
@@ -250,18 +290,11 @@ class BackgroundPanelController {
         presetsLabel.font = .systemFont(ofSize: 11, weight: .semibold)
         presetsLabel.textColor = .secondaryLabelColor
         presetsLabel.frame = NSRect(x: 16, y: y, width: 200, height: 16)
-        contentView.addSubview(presetsLabel)
+        documentView.addSubview(presetsLabel)
         y -= 4
 
-        // Preset grid (4 columns)
-        let presets = BackgroundPreset.presets
-        let gridCols = 4
-        let cellSize: CGFloat = 60
-        let gridSpacing: CGFloat = 8
-        let gridWidth = CGFloat(gridCols) * cellSize + CGFloat(gridCols - 1) * gridSpacing
-        let gridX = (panelWidth - gridWidth) / 2
-        let rows = (presets.count + gridCols - 1) / gridCols
-
+        // Preset grid
+        presetButtons = []
         for (i, preset) in presets.enumerated() {
             let col = i % gridCols
             let row = i / gridCols
@@ -270,93 +303,72 @@ class BackgroundPanelController {
 
             let button = PresetButton(frame: NSRect(x: bx, y: by, width: cellSize, height: cellSize))
             button.preset = preset
+            button.isSelectedPreset = (i == 0)
             button.tag = i
             button.target = self
             button.action = #selector(presetSelected(_:))
-            contentView.addSubview(button)
+            documentView.addSubview(button)
+            presetButtons.append(button)
         }
 
-        y -= CGFloat(rows) * (cellSize + gridSpacing) + 8
+        y -= gridHeight + sectionGap
 
         // Padding slider
-        y -= 28
-        let paddingLabel = NSTextField(labelWithString: "Padding")
-        paddingLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        paddingLabel.textColor = .secondaryLabelColor
-        paddingLabel.frame = NSRect(x: 16, y: y, width: 60, height: 16)
-        contentView.addSubview(paddingLabel)
-
-        let paddingSlider = NSSlider(value: Double(config.padding), minValue: 0, maxValue: 128, target: self, action: #selector(paddingChanged(_:)))
-        paddingSlider.frame = NSRect(x: 80, y: y - 2, width: panelWidth - 130, height: 20)
-        paddingSlider.isContinuous = true
-        paddingSlider.controlSize = .small
-        contentView.addSubview(paddingSlider)
-
-        let paddingValue = NSTextField(labelWithString: "\(Int(config.padding))px")
-        paddingValue.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-        paddingValue.textColor = .secondaryLabelColor
-        paddingValue.frame = NSRect(x: panelWidth - 48, y: y, width: 40, height: 16)
-        paddingValue.alignment = .right
-        paddingValue.tag = 100
-        contentView.addSubview(paddingValue)
+        y -= sliderRowHeight
+        addSliderRow(to: documentView, label: "Padding", value: config.padding, min: 0, max: 128,
+                     action: #selector(paddingChanged(_:)), valueTag: 100, y: y, width: scrollContentWidth)
 
         // Corner radius slider
-        y -= 28
-        let radiusLabel = NSTextField(labelWithString: "Corners")
-        radiusLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        radiusLabel.textColor = .secondaryLabelColor
-        radiusLabel.frame = NSRect(x: 16, y: y, width: 60, height: 16)
-        contentView.addSubview(radiusLabel)
-
-        let radiusSlider = NSSlider(value: Double(config.cornerRadius), minValue: 0, maxValue: 32, target: self, action: #selector(radiusChanged(_:)))
-        radiusSlider.frame = NSRect(x: 80, y: y - 2, width: panelWidth - 130, height: 20)
-        radiusSlider.isContinuous = true
-        radiusSlider.controlSize = .small
-        contentView.addSubview(radiusSlider)
-
-        let radiusValue = NSTextField(labelWithString: "\(Int(config.cornerRadius))px")
-        radiusValue.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-        radiusValue.textColor = .secondaryLabelColor
-        radiusValue.frame = NSRect(x: panelWidth - 48, y: y, width: 40, height: 16)
-        radiusValue.alignment = .right
-        radiusValue.tag = 101
-        contentView.addSubview(radiusValue)
+        y -= sliderRowHeight
+        addSliderRow(to: documentView, label: "Corners", value: config.cornerRadius, min: 0, max: 32,
+                     action: #selector(radiusChanged(_:)), valueTag: 101, y: y, width: scrollContentWidth)
 
         // Shadow slider
-        y -= 28
-        let shadowLabel = NSTextField(labelWithString: "Shadow")
-        shadowLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        shadowLabel.textColor = .secondaryLabelColor
-        shadowLabel.frame = NSRect(x: 16, y: y, width: 60, height: 16)
-        contentView.addSubview(shadowLabel)
+        y -= sliderRowHeight
+        addSliderRow(to: documentView, label: "Shadow", value: config.shadowRadius, min: 0, max: 60,
+                     action: #selector(shadowChanged(_:)), valueTag: 102, y: y, width: scrollContentWidth)
 
-        let shadowSlider = NSSlider(value: Double(config.shadowRadius), minValue: 0, maxValue: 60, target: self, action: #selector(shadowChanged(_:)))
-        shadowSlider.frame = NSRect(x: 80, y: y - 2, width: panelWidth - 130, height: 20)
-        shadowSlider.isContinuous = true
-        shadowSlider.controlSize = .small
-        contentView.addSubview(shadowSlider)
+        // Scroll view
+        let scrollViewHeight = panelHeight - bottomBarHeight
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: bottomBarHeight, width: panelWidth, height: scrollViewHeight))
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.drawsBackground = false
+        scrollView.documentView = documentView
+        rootView.addSubview(scrollView)
 
-        let shadowValue = NSTextField(labelWithString: "\(Int(config.shadowRadius))px")
-        shadowValue.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-        shadowValue.textColor = .secondaryLabelColor
-        shadowValue.frame = NSRect(x: panelWidth - 48, y: y, width: 40, height: 16)
-        shadowValue.alignment = .right
-        shadowValue.tag = 102
-        contentView.addSubview(shadowValue)
+        // Scroll to top
+        documentView.scroll(NSPoint(x: 0, y: totalContentHeight - scrollViewHeight))
 
-        // Apply button
-        let applyBtn = NSButton(title: "Apply Background", target: self, action: #selector(applyClicked))
-        applyBtn.bezelStyle = .rounded
-        applyBtn.controlSize = .large
-        applyBtn.keyEquivalent = "\r"
-        applyBtn.frame = NSRect(x: panelWidth / 2 - 75, y: 16, width: 150, height: 32)
-        contentView.addSubview(applyBtn)
-
-        window.contentView = contentView
+        window.contentView = rootView
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         self.window = window
+    }
+
+    private func addSliderRow(to parent: NSView, label: String, value: CGFloat, min: Double, max: Double,
+                              action: Selector, valueTag: Int, y: CGFloat, width: CGFloat) {
+        let lbl = NSTextField(labelWithString: label)
+        lbl.font = .systemFont(ofSize: 11, weight: .medium)
+        lbl.textColor = .secondaryLabelColor
+        lbl.frame = NSRect(x: 16, y: y, width: 60, height: 16)
+        parent.addSubview(lbl)
+
+        let slider = NSSlider(value: Double(value), minValue: min, maxValue: max, target: self, action: action)
+        slider.frame = NSRect(x: 80, y: y - 2, width: width - 130, height: 20)
+        slider.isContinuous = true
+        slider.controlSize = .small
+        parent.addSubview(slider)
+
+        let valLabel = NSTextField(labelWithString: "\(Int(value))px")
+        valLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        valLabel.textColor = .secondaryLabelColor
+        valLabel.frame = NSRect(x: width - 48, y: y, width: 40, height: 16)
+        valLabel.alignment = .right
+        valLabel.tag = valueTag
+        parent.addSubview(valLabel)
     }
 
     private func updatePreview() {
@@ -366,11 +378,17 @@ class BackgroundPanelController {
     }
 
     private func updateValueLabel(tag: Int, text: String) {
-        guard let contentView = window?.contentView else { return }
-        for subview in contentView.subviews {
-            if let tf = subview as? NSTextField, tf.tag == tag {
-                tf.stringValue = text
-                break
+        guard let rootView = window?.contentView else { return }
+        // Value labels are inside the scroll view's document view
+        for subview in rootView.subviews {
+            if let scrollView = subview as? NSScrollView,
+               let docView = scrollView.documentView {
+                for child in docView.subviews {
+                    if let tf = child as? NSTextField, tf.tag == tag {
+                        tf.stringValue = text
+                        return
+                    }
+                }
             }
         }
     }
@@ -379,6 +397,10 @@ class BackgroundPanelController {
         let presets = BackgroundPreset.presets
         guard sender.tag < presets.count else { return }
         config.preset = presets[sender.tag]
+        for btn in presetButtons {
+            btn.isSelectedPreset = (btn.tag == sender.tag)
+            btn.needsDisplay = true
+        }
         updatePreview()
     }
 
@@ -411,6 +433,7 @@ class BackgroundPanelController {
 
 class PresetButton: NSButton {
     var preset: BackgroundPreset?
+    var isSelectedPreset: Bool = false
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -418,8 +441,6 @@ class PresetButton: NSButton {
         isBordered = false
         title = ""
         layer?.cornerRadius = 8
-        layer?.borderWidth = 0.5
-        layer?.borderColor = NSColor.separatorColor.cgColor
     }
 
     required init?(coder: NSCoder) {
@@ -472,19 +493,33 @@ class PresetButton: NSButton {
             }
         }
 
-        // Draw preset name
+        // Draw preset name with adaptive color
+        let isLight = preset.name == "White" || preset.name == "Sky" || preset.name == "Transparent"
+        let textColor: NSColor = isLight ? .black : .white
+        let shadowColor: NSColor = isLight ? NSColor.white.withAlphaComponent(0.8) : NSColor.black.withAlphaComponent(0.8)
+
+        let shadow = NSShadow()
+        shadow.shadowColor = shadowColor
+        shadow.shadowOffset = NSSize(width: 0, height: -1)
+        shadow.shadowBlurRadius = 2
+
         let attrs: [NSAttributedString.Key: Any] = [
-            .foregroundColor: NSColor.white,
-            .font: NSFont.systemFont(ofSize: 8, weight: .semibold),
+            .foregroundColor: textColor,
+            .font: NSFont.systemFont(ofSize: 8, weight: .bold),
+            .shadow: shadow,
         ]
         let textSize = (preset.name as NSString).size(withAttributes: attrs)
         let textPoint = NSPoint(x: bounds.midX - textSize.width / 2, y: 4)
-        // Shadow behind text for readability
-        let shadowAttrs: [NSAttributedString.Key: Any] = [
-            .foregroundColor: NSColor.black.withAlphaComponent(0.5),
-            .font: NSFont.systemFont(ofSize: 8, weight: .semibold),
-        ]
-        (preset.name as NSString).draw(at: NSPoint(x: textPoint.x + 0.5, y: textPoint.y - 0.5), withAttributes: shadowAttrs)
         (preset.name as NSString).draw(at: textPoint, withAttributes: attrs)
+
+        // Selection ring
+        if isSelectedPreset {
+            context.resetClip()
+            let ringRect = bounds.insetBy(dx: -1, dy: -1)
+            let ringPath = NSBezierPath(roundedRect: ringRect, xRadius: 9, yRadius: 9)
+            NSColor.controlAccentColor.setStroke()
+            ringPath.lineWidth = 2.5
+            ringPath.stroke()
+        }
     }
 }
