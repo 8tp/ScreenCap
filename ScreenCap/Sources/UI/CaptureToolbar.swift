@@ -6,6 +6,7 @@ class CaptureToolbarController {
     private var overlayWindow: NSWindow?
     private var backdropWindow: NSWindow?
     private var escMonitor: Any?
+    private var previousApp: NSRunningApplication?
 
     var onCaptureFullscreen: (() -> Void)?
     var onCaptureArea: (() -> Void)?
@@ -52,9 +53,11 @@ class CaptureToolbarController {
         backdrop.contentView?.addSubview(backdropView)
         backdrop.makeFirstResponder(backdropView)
 
+        // Remember which app was active so we can restore it before capture
+        previousApp = NSWorkspace.shared.frontmostApplication
+
         backdrop.orderFront(nil)
         self.backdropWindow = backdrop
-        NSApp.activate(ignoringOtherApps: true)
 
         // Main toolbar panel — width computed from content
         let itemWidth: CGFloat = 52
@@ -130,23 +133,31 @@ class CaptureToolbarController {
             self?.overlayWindow = nil
             self?.backdropWindow?.orderOut(nil)
             self?.backdropWindow = nil
+            self?.previousApp = nil
         })
     }
 
     private func handleAction(_ action: CaptureAction) {
+        // Re-activate the previously focused app so its windows are visible for capture
+        let appToRestore = previousApp
         dismiss()
 
         // Small delay so the overlay fully disappears before capture starts
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            switch action {
-            case .fullscreen: self?.onCaptureFullscreen?()
-            case .area: self?.onCaptureArea?()
-            case .window: self?.onCaptureWindow?()
-            case .scrolling: self?.onCaptureScrolling?()
-            case .recordScreen: self?.onRecordScreen?()
-            case .recordArea: self?.onRecordArea?()
-            case .ocr: self?.onOCR?()
-            case .colorPicker: self?.onColorPicker?()
+            // Restore the user's previously active app before capturing
+            appToRestore?.activate()
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                switch action {
+                case .fullscreen: self?.onCaptureFullscreen?()
+                case .area: self?.onCaptureArea?()
+                case .window: self?.onCaptureWindow?()
+                case .scrolling: self?.onCaptureScrolling?()
+                case .recordScreen: self?.onRecordScreen?()
+                case .recordArea: self?.onRecordArea?()
+                case .ocr: self?.onOCR?()
+                case .colorPicker: self?.onColorPicker?()
+                }
             }
         }
     }
@@ -196,25 +207,24 @@ private class CaptureToolbarView: NSView {
     struct ToolbarItem {
         let icon: String
         let label: String
-        let shortcut: String
         let action: CaptureAction
     }
 
     private let captureItems: [ToolbarItem] = [
-        ToolbarItem(icon: "rectangle.dashed", label: "Fullscreen", shortcut: "⌘⇧3", action: .fullscreen),
-        ToolbarItem(icon: "rectangle.dashed.badge.record", label: "Area", shortcut: "⌘⇧4", action: .area),
-        ToolbarItem(icon: "macwindow", label: "Window", shortcut: "⌘⇧5", action: .window),
-        ToolbarItem(icon: "arrow.up.and.down.text.horizontal", label: "Scrolling", shortcut: "⌘⇧6", action: .scrolling),
+        ToolbarItem(icon: "rectangle.dashed", label: "Fullscreen", action: .fullscreen),
+        ToolbarItem(icon: "rectangle.dashed.badge.record", label: "Area", action: .area),
+        ToolbarItem(icon: "macwindow", label: "Window", action: .window),
+        ToolbarItem(icon: "arrow.up.and.down.text.horizontal", label: "Scrolling", action: .scrolling),
     ]
 
     private let recordItems: [ToolbarItem] = [
-        ToolbarItem(icon: "record.circle", label: "Record", shortcut: "⌘⇧7", action: .recordScreen),
-        ToolbarItem(icon: "rectangle.inset.filled.and.person.filled", label: "Record Area", shortcut: "⌘⇧8", action: .recordArea),
+        ToolbarItem(icon: "record.circle", label: "Record", action: .recordScreen),
+        ToolbarItem(icon: "rectangle.inset.filled.and.person.filled", label: "Record Area", action: .recordArea),
     ]
 
     private let toolItems: [ToolbarItem] = [
-        ToolbarItem(icon: "text.viewfinder", label: "OCR", shortcut: "⌘⇧9", action: .ocr),
-        ToolbarItem(icon: "eyedropper", label: "Color", shortcut: "⌘⇧0", action: .colorPicker),
+        ToolbarItem(icon: "text.viewfinder", label: "OCR", action: .ocr),
+        ToolbarItem(icon: "eyedropper", label: "Color", action: .colorPicker),
     ]
 
     override init(frame: NSRect) {
@@ -292,6 +302,7 @@ private class CaptureToolbarView: NSView {
     private func makeItemButton(item: ToolbarItem, at origin: NSPoint) -> NSView {
         let width: CGFloat = 48
         let height: CGFloat = 90
+        let shortcut = ShortcutCatalog.definition(for: item.action.shortcutAction)
 
         let container = NSView(frame: NSRect(x: origin.x, y: origin.y, width: width, height: height))
 
@@ -304,7 +315,7 @@ private class CaptureToolbarView: NSView {
         button.image = NSImage(systemSymbolName: item.icon, accessibilityDescription: item.label)?.withSymbolConfiguration(iconConfig)
         button.contentTintColor = .white.withAlphaComponent(0.8)
         button.focusRingType = .exterior
-        button.toolTip = "\(item.label) (\(item.shortcut))"
+        button.toolTip = "\(item.label) (\(shortcut.symbol))"
         button.setAccessibilityLabel(item.label)
         button.setAccessibilityRole(.button)
         button.captureAction = item.action
@@ -324,12 +335,12 @@ private class CaptureToolbarView: NSView {
         container.addSubview(label)
 
         // Shortcut hint
-        let shortcut = NSTextField(labelWithString: item.shortcut)
-        shortcut.font = .systemFont(ofSize: 8, weight: .regular)
-        shortcut.textColor = .white.withAlphaComponent(0.3)
-        shortcut.alignment = .center
-        shortcut.frame = NSRect(x: -4, y: 0, width: width + 8, height: 10)
-        container.addSubview(shortcut)
+        let shortcutLabel = NSTextField(labelWithString: shortcut.symbol)
+        shortcutLabel.font = .systemFont(ofSize: 8, weight: .regular)
+        shortcutLabel.textColor = .white.withAlphaComponent(0.3)
+        shortcutLabel.alignment = .center
+        shortcutLabel.frame = NSRect(x: -4, y: 0, width: width + 8, height: 10)
+        container.addSubview(shortcutLabel)
 
         return container
     }
@@ -392,5 +403,28 @@ private class CaptureToolbarButton: NSButton {
     override func mouseExited(with event: NSEvent) {
         layer?.backgroundColor = nil
         contentTintColor = .white.withAlphaComponent(0.8)
+    }
+}
+
+private extension CaptureAction {
+    var shortcutAction: ShortcutAction {
+        switch self {
+        case .fullscreen:
+            return .captureFullscreen
+        case .area:
+            return .captureArea
+        case .window:
+            return .captureWindow
+        case .scrolling:
+            return .captureScrolling
+        case .recordScreen:
+            return .recordScreen
+        case .recordArea:
+            return .recordArea
+        case .ocr:
+            return .ocr
+        case .colorPicker:
+            return .colorPicker
+        }
     }
 }

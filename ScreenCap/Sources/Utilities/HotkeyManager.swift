@@ -1,6 +1,5 @@
 import Cocoa
 import HotKey
-import Carbon
 
 class HotkeyManager {
     private var hotkeys: [HotKey] = []
@@ -18,64 +17,10 @@ class HotkeyManager {
     func registerAll() {
         unregisterAll()
 
-        // Primary: Cmd+Shift (matches macOS convention)
-        register(key: .three, modifiers: [.command, .shift]) { [weak self] in
-            self?.onCaptureFullscreen?()
-        }
-        register(key: .four, modifiers: [.command, .shift]) { [weak self] in
-            self?.onCaptureArea?()
-        }
-        register(key: .five, modifiers: [.command, .shift]) { [weak self] in
-            self?.onCaptureWindow?()
-        }
-        register(key: .six, modifiers: [.command, .shift]) { [weak self] in
-            self?.onCaptureScrolling?()
-        }
-        register(key: .seven, modifiers: [.command, .shift]) { [weak self] in
-            self?.onRecordScreen?()
-        }
-        register(key: .eight, modifiers: [.command, .shift]) { [weak self] in
-            self?.onRecordArea?()
-        }
-        register(key: .nine, modifiers: [.command, .shift]) { [weak self] in
-            self?.onOCR?()
-        }
-        register(key: .zero, modifiers: [.command, .shift]) { [weak self] in
-            self?.onColorPicker?()
-        }
-
-        // All-in-One toolbar: Cmd+Shift+1
-        register(key: .one, modifiers: [.command, .shift]) { [weak self] in
-            self?.onAllInOne?()
-        }
-        register(key: .one, modifiers: [.control, .shift]) { [weak self] in
-            self?.onAllInOne?()
-        }
-
-        // Secondary: Ctrl+Shift (alternative to avoid conflicts with macOS built-in)
-        register(key: .three, modifiers: [.control, .shift]) { [weak self] in
-            self?.onCaptureFullscreen?()
-        }
-        register(key: .four, modifiers: [.control, .shift]) { [weak self] in
-            self?.onCaptureArea?()
-        }
-        register(key: .five, modifiers: [.control, .shift]) { [weak self] in
-            self?.onCaptureWindow?()
-        }
-        register(key: .six, modifiers: [.control, .shift]) { [weak self] in
-            self?.onCaptureScrolling?()
-        }
-        register(key: .seven, modifiers: [.control, .shift]) { [weak self] in
-            self?.onRecordScreen?()
-        }
-        register(key: .eight, modifiers: [.control, .shift]) { [weak self] in
-            self?.onRecordArea?()
-        }
-        register(key: .nine, modifiers: [.control, .shift]) { [weak self] in
-            self?.onOCR?()
-        }
-        register(key: .zero, modifiers: [.control, .shift]) { [weak self] in
-            self?.onColorPicker?()
+        for shortcut in ShortcutCatalog.allDefinitions() {
+            register(key: shortcut.key, modifiers: shortcut.modifiers) { [weak self] in
+                self?.handler(for: shortcut.action)?()
+            }
         }
     }
 
@@ -87,5 +32,28 @@ class HotkeyManager {
         let hotkey = HotKey(key: key, modifiers: modifiers)
         hotkey.keyDownHandler = handler
         hotkeys.append(hotkey)
+    }
+
+    private func handler(for action: ShortcutAction) -> (() -> Void)? {
+        switch action {
+        case .allInOne:
+            return onAllInOne
+        case .captureFullscreen:
+            return onCaptureFullscreen
+        case .captureArea:
+            return onCaptureArea
+        case .captureWindow:
+            return onCaptureWindow
+        case .captureScrolling:
+            return onCaptureScrolling
+        case .recordScreen:
+            return onRecordScreen
+        case .recordArea:
+            return onRecordArea
+        case .ocr:
+            return onOCR
+        case .colorPicker:
+            return onColorPicker
+        }
     }
 }

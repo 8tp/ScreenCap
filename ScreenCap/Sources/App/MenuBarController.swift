@@ -46,7 +46,7 @@ class MenuBarController {
         let menu = NSMenu()
 
         // All-in-One shortcut at top
-        menu.addItem(makeItem("All-in-One", icon: "square.grid.2x2", action: #selector(showAllInOne), key: "1", modifiers: [.command, .shift]))
+        menu.addItem(makeItem("All-in-One", icon: "square.grid.2x2", action: #selector(showAllInOne), shortcutAction: .allInOne))
         menu.addItem(NSMenuItem.separator())
 
         // Capture section header
@@ -61,10 +61,10 @@ class MenuBarController {
         )
         menu.addItem(captureHeader)
 
-        menu.addItem(makeItem("Capture Fullscreen", icon: "rectangle.dashed", action: #selector(captureFullscreen), key: "3", modifiers: [.command, .shift]))
-        menu.addItem(makeItem("Capture Area", icon: "rectangle.dashed.badge.record", action: #selector(captureArea), key: "4", modifiers: [.command, .shift]))
-        menu.addItem(makeItem("Capture Window", icon: "macwindow", action: #selector(captureWindow), key: "5", modifiers: [.command, .shift]))
-        menu.addItem(makeItem("Capture Scrolling", icon: "arrow.up.and.down.text.horizontal", action: #selector(captureScrolling), key: "6", modifiers: [.command, .shift]))
+        menu.addItem(makeItem("Capture Fullscreen", icon: "rectangle.dashed", action: #selector(captureFullscreen), shortcutAction: .captureFullscreen))
+        menu.addItem(makeItem("Capture Area", icon: "rectangle.dashed.badge.record", action: #selector(captureArea), shortcutAction: .captureArea))
+        menu.addItem(makeItem("Capture Window", icon: "macwindow", action: #selector(captureWindow), shortcutAction: .captureWindow))
+        menu.addItem(makeItem("Capture Scrolling", icon: "arrow.up.and.down.text.horizontal", action: #selector(captureScrolling), shortcutAction: .captureScrolling))
 
         // Timed capture submenu
         let timedItem = NSMenuItem(title: "Timed Capture", action: nil, keyEquivalent: "")
@@ -102,8 +102,8 @@ class MenuBarController {
         )
         menu.addItem(recordHeader)
 
-        menu.addItem(makeItem("Record Screen", icon: "record.circle", action: #selector(recordScreen), key: "7", modifiers: [.command, .shift]))
-        menu.addItem(makeItem("Record Area", icon: "rectangle.inset.filled.and.person.filled", action: #selector(recordArea), key: "8", modifiers: [.command, .shift]))
+        menu.addItem(makeItem("Record Screen", icon: "record.circle", action: #selector(recordScreen), shortcutAction: .recordScreen))
+        menu.addItem(makeItem("Record Area", icon: "rectangle.inset.filled.and.person.filled", action: #selector(recordArea), shortcutAction: .recordArea))
 
         menu.addItem(NSMenuItem.separator())
 
@@ -119,8 +119,8 @@ class MenuBarController {
         )
         menu.addItem(toolsHeader)
 
-        menu.addItem(makeItem("OCR Screen Region", icon: "text.viewfinder", action: #selector(ocrRegion), key: "9", modifiers: [.command, .shift]))
-        menu.addItem(makeItem("Color Picker", icon: "eyedropper", action: #selector(pickColor), key: "0", modifiers: [.command, .shift]))
+        menu.addItem(makeItem("OCR Screen Region", icon: "text.viewfinder", action: #selector(ocrRegion), shortcutAction: .ocr))
+        menu.addItem(makeItem("Color Picker", icon: "eyedropper", action: #selector(pickColor), shortcutAction: .colorPicker))
         menu.addItem(makeItem("Pin Last Capture", icon: "pin", action: #selector(pinLastCapture)))
 
         menu.addItem(NSMenuItem.separator())
@@ -166,9 +166,16 @@ class MenuBarController {
         return menu
     }
 
-    private func makeItem(_ title: String, icon: String, action: Selector, key: String = "", modifiers: NSEvent.ModifierFlags = []) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
-        item.keyEquivalentModifierMask = modifiers
+    private func makeItem(_ title: String, icon: String, action: Selector, key: String = "", modifiers: NSEvent.ModifierFlags = [], shortcutAction: ShortcutAction? = nil) -> NSMenuItem {
+        let item: NSMenuItem
+        if let shortcutAction {
+            let shortcut = ShortcutCatalog.definition(for: shortcutAction)
+            item = NSMenuItem(title: title, action: action, keyEquivalent: shortcut.keyEquivalent)
+            item.keyEquivalentModifierMask = shortcut.modifiers
+        } else {
+            item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            item.keyEquivalentModifierMask = modifiers
+        }
         item.target = self
         item.image = NSImage(systemSymbolName: icon, accessibilityDescription: nil)
         return item

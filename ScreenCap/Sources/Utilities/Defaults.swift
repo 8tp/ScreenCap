@@ -74,6 +74,17 @@ class Defaults {
         set { store.set(newValue, forKey: "freezeScreen") }
     }
 
+    var shortcutProfile: ShortcutModifierProfile {
+        get {
+            let rawValue = store.string(forKey: "shortcutProfile") ?? ShortcutModifierProfile.controlShift.rawValue
+            return ShortcutModifierProfile(rawValue: rawValue) ?? .controlShift
+        }
+        set {
+            store.set(newValue.rawValue, forKey: "shortcutProfile")
+            postShortcutConfigurationDidChange()
+        }
+    }
+
     // Desktop icons currently hidden by user toggle (not capture-related)
     var desktopIconsHidden: Bool {
         get { store.bool(forKey: "desktopIconsHidden") }
@@ -82,12 +93,12 @@ class Defaults {
 
     // GIF export settings
     var gifMaxWidth: Int {
-        get { let v = store.integer(forKey: "gifMaxWidth"); return v > 0 ? v : 640 }
+        get { let v = store.integer(forKey: "gifMaxWidth"); return v > 0 ? v : 800 }
         set { store.set(newValue, forKey: "gifMaxWidth") }
     }
 
     var gifFrameRate: Int {
-        get { let v = store.integer(forKey: "gifFrameRate"); return v > 0 ? v : 15 }
+        get { let v = store.integer(forKey: "gifFrameRate"); return v > 0 ? v : 20 }
         set { store.set(newValue, forKey: "gifFrameRate") }
     }
 

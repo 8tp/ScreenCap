@@ -26,6 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingController: OnboardingWindowController!
     private var captureToolbar: CaptureToolbarController!
     private var pinnedWindows: [PinnedImageWindow] = []
+    private var shortcutSettingsObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         captureEngine = ScreenCaptureEngine()
@@ -65,6 +66,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         setupCaptureToolbar()
         setupHotkeys()
+        observeShortcutSettings()
 
         menuBarController.onShowAllInOne = { [weak self] in
             self?.captureToolbar.toggle()
@@ -132,10 +134,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManager.registerAll()
     }
 
+    private func observeShortcutSettings() {
+        shortcutSettingsObserver = NotificationCenter.default.addObserver(
+            forName: .shortcutConfigurationDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.hotkeyManager.registerAll()
+            self?.menuBarController.rebuildMenu()
+        }
+    }
+
     private func pinImage(url: URL) {
         guard let image = NSImage(contentsOf: url) else { return }
         let pinned = PinnedImageWindow(image: image, imageURL: url)
         pinned.show()
         pinnedWindows.append(pinned)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        if let shortcutSettingsObserver {
+            NotificationCenter.default.removeObserver(shortcutSettingsObserver)
+        }
     }
 }

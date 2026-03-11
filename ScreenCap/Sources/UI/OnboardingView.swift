@@ -18,10 +18,10 @@ class OnboardingWindowController {
             self.window = nil
         }
         let hostingView = NSHostingView(rootView: view)
-        hostingView.frame = NSRect(x: 0, y: 0, width: 500, height: 520)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 500, height: 620)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 520),
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 620),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -44,9 +44,21 @@ struct OnboardingView: View {
 
     @State private var screenRecordingGranted = AppPermissions.hasScreenRecordingPermission()
     @State private var accessibilityGranted = AppPermissions.hasAccessibilityPermission()
+    @AppStorage("shortcutProfile") private var shortcutProfileRaw: String = ShortcutModifierProfile.controlShift.rawValue
 
     var allGranted: Bool {
         screenRecordingGranted && accessibilityGranted
+    }
+
+    private var shortcutProfile: Binding<ShortcutModifierProfile> {
+        Binding(
+            get: { ShortcutModifierProfile(rawValue: shortcutProfileRaw) ?? .controlShift },
+            set: { shortcutProfileRaw = $0.rawValue }
+        )
+    }
+
+    private var allInOneShortcut: String {
+        ShortcutCatalog.definition(for: .allInOne, profile: shortcutProfile.wrappedValue).symbol
     }
 
     var body: some View {
@@ -61,7 +73,7 @@ struct OnboardingView: View {
                 Text("Welcome to ScreenCap")
                     .font(.system(size: 24, weight: .bold))
 
-                Text("The free, open-source screenshot tool for macOS.\nGrant permissions below to get started.")
+                Text("The free, open-source screenshot tool for macOS.\nGrant permissions and choose a shortcut profile to get started.")
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -104,6 +116,33 @@ struct OnboardingView: View {
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .padding(.horizontal, 28)
 
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Shortcut Setup")
+                    .font(.system(size: 13, weight: .semibold))
+
+                Picker("Shortcut profile", selection: shortcutProfile) {
+                    ForEach(ShortcutModifierProfile.allCases) { profile in
+                        Text(profile.title).tag(profile)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text(shortcutProfile.wrappedValue.summary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("ScreenCap cannot suppress Apple's screenshot shortcuts directly. The recommended profile avoids the built-in Cmd+Shift+3/4/5 conflicts.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(16)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .padding(.horizontal, 28)
+            .padding(.top, 16)
+
             Spacer()
 
             // Shortcut hint
@@ -112,7 +151,7 @@ struct OnboardingView: View {
                     Image(systemName: "keyboard")
                         .foregroundStyle(.tertiary)
                         .font(.system(size: 11))
-                    Text("Press ⌘⇧1 to open the capture toolbar")
+                    Text("Press \(allInOneShortcut) to open the capture toolbar")
                         .font(.system(size: 11))
                         .foregroundStyle(.tertiary)
                 }
@@ -138,7 +177,10 @@ struct OnboardingView: View {
             .padding(.horizontal, 28)
             .padding(.bottom, 28)
         }
-        .frame(width: 500, height: 520)
+        .frame(width: 500, height: 620)
+        .onChange(of: shortcutProfileRaw) { _, _ in
+            postShortcutConfigurationDidChange()
+        }
     }
 
     private func refreshStatus() {

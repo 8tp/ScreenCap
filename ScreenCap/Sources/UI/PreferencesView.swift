@@ -47,6 +47,14 @@ struct PreferencesView: View {
     @AppStorage("freezeScreen") private var freezeScreen: Bool = true
     @AppStorage("gifMaxWidth") private var gifMaxWidth: Int = 640
     @AppStorage("gifFrameRate") private var gifFrameRate: Int = 15
+    @AppStorage("shortcutProfile") private var shortcutProfileRaw: String = ShortcutModifierProfile.controlShift.rawValue
+
+    private var shortcutProfile: Binding<ShortcutModifierProfile> {
+        Binding(
+            get: { ShortcutModifierProfile(rawValue: shortcutProfileRaw) ?? .controlShift },
+            set: { shortcutProfileRaw = $0.rawValue }
+        )
+    }
 
     var body: some View {
         TabView {
@@ -61,6 +69,9 @@ struct PreferencesView: View {
         }
         .padding()
         .frame(minWidth: 500, minHeight: 420)
+        .onChange(of: shortcutProfileRaw) { _, _ in
+            postShortcutConfigurationDidChange()
+        }
     }
 
     private var generalTab: some View {
@@ -169,36 +180,58 @@ struct PreferencesView: View {
     private var shortcutsTab: some View {
         Form {
             Section {
-                ShortcutRow(icon: "square.grid.2x2", label: "All-in-One Toolbar", shortcut: "Cmd+Shift+1")
+                Picker("Shortcut profile:", selection: shortcutProfile) {
+                    ForEach(ShortcutModifierProfile.allCases) { profile in
+                        Text(profile.title).tag(profile)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text(shortcutProfile.wrappedValue.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Button("Use Recommended Conflict-Free Shortcuts") {
+                    shortcutProfile.wrappedValue = .controlShift
+                }
+            } header: {
+                Text("Profile")
+            }
+
+            Section {
+                ForEach(ShortcutAction.quickAccess) { action in
+                    ShortcutRow(icon: action.icon, label: action.title, shortcut: ShortcutCatalog.definition(for: action, profile: shortcutProfile.wrappedValue).text)
+                }
             } header: {
                 Text("Quick Access")
             }
 
             Section {
-                ShortcutRow(icon: "rectangle.dashed", label: "Capture Fullscreen", shortcut: "Cmd+Shift+3")
-                ShortcutRow(icon: "rectangle.dashed.badge.record", label: "Capture Area", shortcut: "Cmd+Shift+4")
-                ShortcutRow(icon: "macwindow", label: "Capture Window", shortcut: "Cmd+Shift+5")
-                ShortcutRow(icon: "arrow.up.and.down.text.horizontal", label: "Scrolling Capture", shortcut: "Cmd+Shift+6")
+                ForEach(ShortcutAction.capture) { action in
+                    ShortcutRow(icon: action.icon, label: action.title, shortcut: ShortcutCatalog.definition(for: action, profile: shortcutProfile.wrappedValue).text)
+                }
             } header: {
                 Text("Capture")
             }
 
             Section {
-                ShortcutRow(icon: "record.circle", label: "Record Screen", shortcut: "Cmd+Shift+7")
-                ShortcutRow(icon: "rectangle.inset.filled.and.person.filled", label: "Record Area", shortcut: "Cmd+Shift+8")
+                ForEach(ShortcutAction.recording) { action in
+                    ShortcutRow(icon: action.icon, label: action.title, shortcut: ShortcutCatalog.definition(for: action, profile: shortcutProfile.wrappedValue).text)
+                }
             } header: {
                 Text("Recording")
             }
 
             Section {
-                ShortcutRow(icon: "text.viewfinder", label: "OCR Text Recognition", shortcut: "Cmd+Shift+9")
-                ShortcutRow(icon: "eyedropper", label: "Color Picker", shortcut: "Cmd+Shift+0")
+                ForEach(ShortcutAction.tools) { action in
+                    ShortcutRow(icon: action.icon, label: action.title, shortcut: ShortcutCatalog.definition(for: action, profile: shortcutProfile.wrappedValue).text)
+                }
             } header: {
                 Text("Tools")
             }
 
             Section {
-                Text("Shortcuts are system-wide and not currently customizable. Cmd+Shift is the primary modifier. Ctrl+Shift also works as an alternative if macOS built-in screenshots conflict.")
+                Text("This first iteration uses a shared shortcut profile for all actions. Per-action rebinding can be added later without changing the capture flow.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -264,9 +297,10 @@ struct PreferencesView: View {
 
     private func resetAll() {
         let defaults = UserDefaults.standard
-        for key in ["saveLocation", "imageFormat", "jpegQuality", "copyToClipboard", "showThumbnail", "playSound", "includeWindowShadow", "thumbnailDuration", "captureDelay", "hideDesktopIcons", "thumbnailPosition", "freezeScreen", "gifMaxWidth", "gifFrameRate", "recentCaptures"] {
+        for key in ["saveLocation", "imageFormat", "jpegQuality", "copyToClipboard", "showThumbnail", "playSound", "includeWindowShadow", "thumbnailDuration", "captureDelay", "hideDesktopIcons", "thumbnailPosition", "freezeScreen", "gifMaxWidth", "gifFrameRate", "shortcutProfile", "recentCaptures"] {
             defaults.removeObject(forKey: key)
         }
+        postShortcutConfigurationDidChange()
     }
 }
 
